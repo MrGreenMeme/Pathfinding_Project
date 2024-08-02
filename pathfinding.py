@@ -1,9 +1,8 @@
 # Example file showing a basic pygame "game loop"
 import pygame
 
-
 class Cube:
-    def __init__(self, color, traversable=True):
+    def __init__(self, color="white", traversable=True):
         self.color = color
         self.traversable = traversable
 
@@ -13,15 +12,21 @@ class Grid:
         self.rows = rows
         self.cols = cols
         self.cube_size = cube_size
-        self.grid = [[Cube("white", True) for i in range(cols)] for j in range(rows)]
+        self.grid = [[Cube() for _ in range(cols)] for _ in range(rows)]
 
-    def draw_cube(self, screen, x, y, center_x, center_y):
+    def draw_cube(self, screen, x, y, offset_x, offset_y):
         cube = self.grid[y][x]
         # inside cell
-        pygame.draw.rect(screen, cube.color, (center_x + x * self.cube_size, center_y + y * self.cube_size, self.cube_size, self.cube_size))
+        pygame.draw.rect(screen, cube.color, (offset_x + x * self.cube_size, offset_y + y * self.cube_size, self.cube_size, self.cube_size))
         # outline of cell
-        pygame.draw.rect(screen, "black", (center_x + x * self.cube_size, center_y + y * self.cube_size, self.cube_size, self.cube_size), 1)
+        pygame.draw.rect(screen, "black", (offset_x + x * self.cube_size, offset_y + y * self.cube_size, self.cube_size, self.cube_size), 1)
 
+    def center_grid(self, window_width, window_height):
+        grid_width = self.cols * self.cube_size
+        grid_height = self.rows * self.cube_size
+        offset_x = (window_width - grid_width) // 2
+        offset_y = (window_height - grid_height) // 2
+        return offset_x, offset_y
 
 # pygame setup
 pygame.init()
@@ -37,14 +42,7 @@ screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE
 pygame.display.set_caption("Pathfinding")
 
 # center grid
-def center_grid(window_width, window_height, grid_width, grid_height):
-    new_center_x = (window_width - grid_width) // 2
-    new_center_y = (window_height - grid_height) // 2
-    return new_center_x, new_center_y
-
-grid_width = cols * cube_size
-grid_height = rows * cube_size
-center_x, center_y = center_grid(window_width, window_height, grid_width, grid_height)
+center_x, center_y = grid.center_grid(window_width, window_height)
 
 # Game loop
 clock = pygame.time.Clock()
@@ -62,20 +60,17 @@ while running:
             print("x: " +  str(new_window_width) + " y: " + str(new_window_height))
 
             screen = pygame.display.set_mode((new_window_width, new_window_height), pygame.RESIZABLE)
-            center_x, center_y = center_grid(new_window_width, new_window_height, grid_width, grid_height)
+            center_x, center_y = grid.center_grid(new_window_width, new_window_height)
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             x,y = event.pos
-            print("x: " +  str(x) + " y: " + str(y))
+            print(f"x: {x} y: {y}")
 
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("white")
-
     for y in range(grid.rows):
         for x in range(grid.cols):
             grid.draw_cube(screen, x, y, center_x, center_y)
-
-            # RENDER YOUR GAME HERE
 
     # flip() the display to put your work on screen
     pygame.display.flip()
