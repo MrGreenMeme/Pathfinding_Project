@@ -1,4 +1,9 @@
 import pygame
+import os
+import json
+from tkinter import filedialog
+import datetime
+import time
 
 class Cube:
     def __init__(self, color="white", traversable=True):
@@ -50,6 +55,31 @@ class Grid:
             elif selected_tool == 2:
                 cube.color = "grey"
                 cube.traversable = False
+
+    def export_grid(self, filename):
+        data = {
+            "rows": self.rows,
+            "cols": self.cols,
+            "cube_size": self.cube_size,
+            "grid": [[{"color": cube.color, "traversable": cube.traversable} for cube in row] for row in self.grid],
+            "start_cube": self.start_cube,
+            "goal_cube": self.goal_cube,
+        }
+        with open(filename, 'w') as f:
+            json.dump(data, f)
+        print(f"Map saved under: {filename} with data: {data}")
+
+    def load_grid(self, filename):
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        self.rows = data["rows"]
+        self.cols = data["cols"]
+        self.cube_size = data["cube_size"]
+        self.grid = [[Cube(**cube_data) for cube_data in row] for row in data["grid"]]
+        self.start_cube = data["start_cube"]
+        self.goal_cube = data["goal_cube"]
+        print(f"Loaded map from: {filename} with data: {data}")
+
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
         self.tools = tools
@@ -75,7 +105,7 @@ class Toolbar:
 pygame.init()
 
 # grid setup
-rows, cols = (5, 5)
+rows, cols = (15, 15)
 cube_size = 50
 grid = Grid(rows, cols, cube_size)
 
@@ -84,7 +114,11 @@ flag_img = pygame.image.load('flag.png')
 flag_img = pygame.transform.scale(flag_img, (cube_size, cube_size))
 play_img = pygame.image.load('play.png')
 play_img = pygame.transform.scale(play_img, (cube_size, cube_size))
-toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("play", play_img)], 50, 10)
+save_img = pygame.image.load('save.png')
+save_img = pygame.transform.scale(save_img, (cube_size, cube_size))
+load_img = pygame.image.load('load.png')
+load_img = pygame.transform.scale(load_img, (cube_size, cube_size))
+toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("play", play_img), ("save", save_img), ("load", load_img)], 50, 10)
 
 # window setup
 window_width, window_height = 1000, 1000
@@ -113,13 +147,23 @@ while running:
             center_x, center_y = grid.center_grid(new_window_width, new_window_height)
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
-            x,y = event.pos
-            print(f"x: {x} y: {y}")
-            if y < toolbar.tool_size:
-                toolbar.handle_click(x,y)
-                print("Toolbar clicked")
-            else:
-                grid.handle_click(x,y, center_x, center_y, toolbar.selected_tool)
+            if event.button == 1: # only accept left-click
+                x,y = event.pos
+                print(f"x: {x} y: {y}")
+                if y < toolbar.tool_size:
+                    toolbar.handle_click(x,y)
+                    print("Toolbar clicked")
+                elif toolbar.selected_tool == 4:
+                    current_time = datetime.datetime.now()
+                    timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
+                    grid.export_grid(f"maps/grid_{timestamp}.json")
+                elif toolbar.selected_tool == 5:
+                    filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("JSON files", "*.json")])
+                    if filename:
+                        grid.load_grid(filename)
+                        center_x, center_y = grid.center_grid(window_width, window_height)
+                else:
+                    grid.handle_click(x,y, center_x, center_y, toolbar.selected_tool)
 
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("white")
@@ -127,13 +171,18 @@ while running:
     # draw toolbar
     toolbar.draw_toolbar(screen)
 
+    start_time = time.perf_counter()
     for y in range(grid.rows):
         for x in range(grid.cols):
             grid.draw_cube(screen, x, y, center_x, center_y)
+    end_time = time.perf_counter()
+    elapsed_time = (end_time - start_time) * 1000  # Convert to milliseconds
+    print(f"Function executed in {elapsed_time:.2f} ms")
 
     # flip() the display to put your work on screen
     pygame.display.flip()
 
-    clock.tick(144)  # limits FPS to 144
+    clock.tick()
+    print(round(clock.get_fps()))
 
 pygame.quit()
