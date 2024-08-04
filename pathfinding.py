@@ -80,6 +80,14 @@ class Grid:
         self.goal_cube = data["goal_cube"]
         print(f"Loaded map from: {filename} with data: {data}")
 
+    def resize(self, new_rows, new_cols):
+        self.rows = new_rows
+        self.cols = new_cols
+        self.grid = [[Cube() for _ in range(new_cols)] for _ in range(new_rows)]
+        self.start_cube = None
+        self.goal_cube = None
+
+
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
         self.tools = tools
@@ -101,6 +109,44 @@ class Toolbar:
         if y < self.tool_size and x < (self.tool_size * (len(self.tools) + 1)):
             self.selected_tool = x // (self.tool_size + self.tool_spacing)
 
+class InputField:
+    def __init__(self, x, y, width, height, font, inactive_color, active_color):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.color = inactive_color
+        self.inactive_color = inactive_color
+        self.active_color = active_color
+        self.text = ''
+        self.font = font
+        self.active = False
+
+    def handle_input(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.active = not self.active
+            else:
+                self.active = False
+            self.color = self.active_color if self.active else self.inactive_color
+        elif event.type == pygame.KEYDOWN:
+            if self.active:
+                if event.key == pygame.K_RETURN:
+                    print(f"Entered: {self.text}")
+                    try:
+                        new_rows, new_cols = map(int, self.text.lower().split('x'))
+                        grid.resize(new_rows, new_cols)
+                    except Exception:
+                        print("Format should be rowsxcols like 10x10")
+                    self.text = ''
+                elif event.key == pygame.K_BACKSPACE:
+                    self.text = self.text[:-1]
+                else:
+                    self.text += event.unicode
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect, 2)
+        text_surface = self.font.render(self.text, True, self.color)
+        screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5))
+
+
 def load_image(file_path, size):
     image = pygame.image.load(file_path)
     image = pygame.transform.scale(image, (size, size))
@@ -118,6 +164,12 @@ pygame.display.set_caption("Pathfinding")
 rows, cols = (15, 15)
 grid = Grid(rows, cols)
 cube_size = 50
+
+# font setup
+font = pygame.font.Font(None, 32)
+
+# input field setup
+input_field = InputField(window_width - 150, 10, 140, 32, font, pygame.Color('grey75'), pygame.Color('grey0'))
 
 # toolbar setup
 tool_size = 50
@@ -157,21 +209,24 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1: # only accept left-click
                 x,y = event.pos
-
                 if y < toolbar.tool_size:
                     toolbar.handle_click(x,y)
+                    input_field.handle_input(event)
                     print("Toolbar clicked")
-                elif toolbar.selected_tool == 5:
-                    current_time = datetime.datetime.now()
-                    timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
-                    grid.export_grid(f"maps/grid_{timestamp}.json")
-                elif toolbar.selected_tool == 6:
-                    filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("JSON files", "*.json")])
-                    if filename:
-                        grid.load_grid(filename)
-                        center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                    if toolbar.selected_tool == 5:
+                        current_time = datetime.datetime.now()
+                        timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
+                        grid.export_grid(f"maps/grid_{timestamp}.json")
+                        print(f"Map: grid_{timestamp}.json saved in map folder")
+                    if toolbar.selected_tool == 6:
+                        filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("JSON files", "*.json")])
+                        if filename:
+                            grid.load_grid(filename)
+                            center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                 else:
                     mouse_down = True
+                    input_field.active = False
+                    input_field.color = pygame.Color('grey75')
                     grid.handle_click(x,y, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
 
         elif event.type == pygame.MOUSEBUTTONUP:
@@ -191,12 +246,14 @@ while running:
             elif event.key == pygame.K_DOWN:
                 zoom_factor = max(zoom_increment, zoom_factor - zoom_increment)
                 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+            input_field.handle_input(event)
 
     # fill the screen with a color to wipe away anything from last frame
     screen.fill("white")
 
     # draw toolbar
     toolbar.draw_toolbar(screen)
+    input_field.draw(screen)
 
     start_time = time.perf_counter()
     for y in range(grid.rows):
