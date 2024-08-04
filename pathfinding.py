@@ -55,6 +55,8 @@ class Grid:
             elif selected_tool == 2:
                 cube.color = "grey"
                 cube.traversable = False
+            elif selected_tool == 3:
+                cube.color = "white"
 
     def export_grid(self, filename):
         data = {
@@ -113,9 +115,9 @@ screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE
 pygame.display.set_caption("Pathfinding")
 
 # grid setup
-rows, cols = (20, 20)
+rows, cols = (15, 15)
 grid = Grid(rows, cols)
-cube_size = 40
+cube_size = 50
 
 # toolbar setup
 tool_size = 50
@@ -123,7 +125,8 @@ flag_img = load_image('flag.png', tool_size)
 play_img = load_image('play.png', tool_size)
 save_img = load_image('save.png', tool_size)
 load_img = load_image('load.png', tool_size)
-toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("play", play_img), ("save", save_img), ("load", load_img)], 50, 10)
+eraser_img = load_image('eraser.png', tool_size)
+toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("eraser", eraser_img), ("play", play_img), ("save", save_img), ("load", load_img)], 50, 10)
 
 # zoom
 zoom_factor = 1.0
@@ -135,6 +138,7 @@ center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size
 # Game loop
 clock = pygame.time.Clock()
 running = True
+mouse_down = False
 
 while running:
     # poll for events
@@ -153,20 +157,31 @@ while running:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1: # only accept left-click
                 x,y = event.pos
-                print(f"x: {x} y: {y}")
+
                 if y < toolbar.tool_size:
                     toolbar.handle_click(x,y)
                     print("Toolbar clicked")
-                elif toolbar.selected_tool == 4:
+                elif toolbar.selected_tool == 5:
                     current_time = datetime.datetime.now()
                     timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
                     grid.export_grid(f"maps/grid_{timestamp}.json")
-                elif toolbar.selected_tool == 5:
+                elif toolbar.selected_tool == 6:
                     filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("JSON files", "*.json")])
                     if filename:
                         grid.load_grid(filename)
                         center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                 else:
+                    mouse_down = True
+                    grid.handle_click(x,y, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
+
+        elif event.type == pygame.MOUSEBUTTONUP:
+            if event.button == 1:
+                mouse_down = False
+
+        elif event.type == pygame.MOUSEMOTION:
+            if mouse_down:
+                x,y = event.pos
+                if y > toolbar.tool_size:
                     grid.handle_click(x,y, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
 
         elif event.type == pygame.KEYDOWN:
