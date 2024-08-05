@@ -18,14 +18,15 @@ class Grid:
         self.grid = [[Cube() for _ in range(cols)] for _ in range(rows)]
         self.start_cube = None
         self.goal_cube = None
+        self.dirty_rects = []
 
     def draw_cube(self, screen, x, y, cube_size, offset_x, offset_y):
         cube = self.grid[y][x]
-        # inside cell
+        rect = pygame.Rect(offset_x + x * cube_size, offset_y + y * cube_size, cube_size, cube_size)
         if cube.color != "white":
-            pygame.draw.rect(screen, cube.color, (offset_x + x * cube_size, offset_y + y * cube_size, cube_size, cube_size))
-        # outline of cell
-        pygame.draw.rect(screen, "black", (offset_x + x * cube_size, offset_y + y * cube_size, cube_size, cube_size), 1)
+            pygame.draw.rect(screen, cube.color, rect)
+        pygame.draw.rect(screen, "black", rect, 1)
+        return rect
 
     def center_grid(self, window_width, window_height, cube_size):
         grid_width = self.cols * cube_size
@@ -44,12 +45,14 @@ class Grid:
                 if self.start_cube:
                     old_x, old_y = self.start_cube
                     self.grid[old_y][old_x].color = "white"
+                    self.dirty_rects.append(self.draw_cube(screen, old_x, old_y, cube_size, offset_x, offset_y))
                 self.start_cube = grid_x,grid_y
                 cube.color = "green"
             elif selected_tool == 1:
                 if self.goal_cube:
                     old_x, old_y = self.goal_cube
                     self.grid[old_y][old_x].color = "white"
+                    self.dirty_rects.append(self.draw_cube(screen, old_x, old_y, cube_size, offset_x, offset_y))
                 self.goal_cube = grid_x,grid_y
                 cube.color = "red"
             elif selected_tool == 2:
@@ -57,6 +60,7 @@ class Grid:
                 cube.traversable = False
             elif selected_tool == 3:
                 cube.color = "white"
+            self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
 
     def export_grid(self, filename):
         data = {
@@ -133,15 +137,20 @@ class InputField:
                     try:
                         new_rows, new_cols = map(int, self.text.lower().split('x'))
                         grid.resize(new_rows, new_cols)
+                        redraw_screen()
                     except Exception:
                         print("Format should be rowsxcols like 10x10")
+                    self.draw(screen)
                     self.text = ''
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
+                    self.draw(screen)
                 else:
                     self.text += event.unicode
+                    self.draw(screen)
 
     def draw(self, screen):
+        pygame.draw.rect(screen, "white", self)
         pygame.draw.rect(screen, self.color, self.rect, 2)
         text_surface = self.font.render(self.text, True, self.color)
         screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5))
@@ -187,6 +196,18 @@ zoom_increment = 0.1
 # center grid
 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
 
+# Initial draw of the entire grid
+def redraw_screen():
+    screen.fill("white")
+    toolbar.draw_toolbar(screen)
+    input_field.draw(screen)
+    for y in range(grid.rows):
+        for x in range(grid.cols):
+            grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
+    pygame.display.flip()
+
+redraw_screen()
+
 # Game loop
 clock = pygame.time.Clock()
 running = True
@@ -205,13 +226,16 @@ while running:
 
             screen = pygame.display.set_mode((new_window_width, new_window_height), pygame.RESIZABLE)
             center_x, center_y = grid.center_grid(new_window_width, new_window_height, int(cube_size * zoom_factor))
+            redraw_screen()
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if event.button == 1: # only accept left-click
                 x,y = event.pos
                 if y < toolbar.tool_size:
                     toolbar.handle_click(x,y)
+                    toolbar.draw_toolbar(screen)
                     input_field.handle_input(event)
+                    input_field.draw(screen)
                     print("Toolbar clicked")
                     if toolbar.selected_tool == 5:
                         current_time = datetime.datetime.now()
@@ -223,10 +247,12 @@ while running:
                         if filename:
                             grid.load_grid(filename)
                             center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                            redraw_screen()
                 else:
                     mouse_down = True
                     input_field.active = False
                     input_field.color = pygame.Color('grey75')
+                    input_field.draw(screen)
                     grid.handle_click(x,y, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
 
         elif event.type == pygame.MOUSEBUTTONUP:
@@ -243,25 +269,22 @@ while running:
             if event.key == pygame.K_UP:
                 zoom_factor += zoom_increment
                 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                redraw_screen()
             elif event.key == pygame.K_DOWN:
                 zoom_factor = max(zoom_increment, zoom_factor - zoom_increment)
                 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                redraw_screen()
             input_field.handle_input(event)
 
-    # fill the screen with a color to wipe away anything from last frame
-    screen.fill("white")
+    # redraw only dirty rectangles
+    for rect in grid.dirty_rects:
+        pygame.draw.rect(screen, "white", rect)  # Clear the previous color
+        # Redraw the cube in the dirty rect
+        x = (rect.x - center_x) // int(cube_size * zoom_factor)
+        y = (rect.y - center_y) // int(cube_size * zoom_factor)
+        grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
 
-    # draw toolbar
-    toolbar.draw_toolbar(screen)
-    input_field.draw(screen)
-
-    start_time = time.perf_counter()
-    for y in range(grid.rows):
-        for x in range(grid.cols):
-            grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
-    end_time = time.perf_counter()
-    elapsed_time = (end_time - start_time) * 1000  # Convert to milliseconds
-    print(f"Function executed in {elapsed_time:.2f} ms")
+    grid.dirty_rects.clear()
 
     # flip() the display to put your work on screen
     pygame.display.flip()
