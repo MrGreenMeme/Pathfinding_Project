@@ -56,7 +56,8 @@ class Grid:
                     self.grid[old_y][old_x].traversable = True
                     self.grid[old_y][old_x].color = "white"
                     self.dirty_rects.append(self.draw_cube(screen, old_x, old_y, cube_size, offset_x, offset_y))
-                self.start_cube = grid_x,grid_y
+                self.start_cube = (grid_x, grid_y)
+                self.grid[grid_y][grid_x].traversable = True
                 cube.color = "green"
                 self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
             elif selected_tool == 1:
@@ -66,7 +67,8 @@ class Grid:
                     self.grid[old_y][old_x].traversable = True
                     self.grid[old_y][old_x].color = "white"
                     self.dirty_rects.append(self.draw_cube(screen, old_x, old_y, cube_size, offset_x, offset_y))
-                self.goal_cube = grid_x,grid_y
+                self.goal_cube = (grid_x, grid_y)
+                self.grid[grid_y][grid_x].traversable = True
                 cube.color = "red"
                 self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
             elif selected_tool == 2:
@@ -83,26 +85,50 @@ class Grid:
                 self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
 
     def export_grid(self, filename):
-        data = {
-            "rows": self.rows,
-            "cols": self.cols,
-            "grid": [[{"color": cube.color, "traversable": cube.traversable} for cube in row] for row in self.grid],
-            "start_cube": self.start_cube,
-            "goal_cube": self.goal_cube,
-        }
         with open(filename, 'w') as f:
-            json.dump(data, f)
-        print(f"Map saved under: {filename} with data: {data}")
+            f.write(f"rows {self.rows}\n")
+            f.write(f"cols {self.cols}\n")
+            if self.start_cube:
+                f.write(f"start {self.start_cube[0]},{self.start_cube[1]}\n")
+            if self.goal_cube:
+                f.write(f"goal {self.goal_cube[0]},{self.goal_cube[1]}\n")
+
+            # Write grid data
+            for row in self.grid:
+                for cube in row:
+                    f.write('@' if not cube.traversable else '.')
+                f.write('\n')
+
+        print(f"Map saved under: {filename}")
 
     def load_grid(self, filename):
         with open(filename, 'r') as f:
-            data = json.load(f)
-        self.rows = data["rows"]
-        self.cols = data["cols"]
-        self.grid = [[Cube(**cube_data) for cube_data in row] for row in data["grid"]]
-        self.start_cube = data["start_cube"]
-        self.goal_cube = data["goal_cube"]
-        print(f"Loaded map from: {filename} with data: {data}")
+            lines = f.readlines()
+
+            self.rows = int(lines[0].split()[1])
+            self.cols = int(lines[1].split()[1])
+            self.grid = [[Cube() for _ in range(self.cols)] for _ in range(self.rows)]
+
+            y = 0
+            for line in lines[2:]:
+                if line.startswith("start"):
+                    start_x, start_y = map(int, line.split()[1].split(','))
+                    self.start_cube = (start_x, start_y)
+                elif line.startswith("goal"):
+                    goal_x, goal_y = map(int, line.split()[1].split(','))
+                    self.goal_cube = (goal_x, goal_y)
+                else:
+                    row_data = line.strip()
+                    for x, char in enumerate(row_data):
+                        if char == '@':
+                            self.grid[y][x].traversable = False
+                            self.grid[y][x].color = "grey"
+                        elif char == '.':
+                            self.grid[y][x].traversable = True
+                            self.grid[y][x].color = "white"
+                    y += 1
+
+            print(f"Loaded map from: {filename}")
 
     def resize(self, new_rows, new_cols):
         self.rows = new_rows
@@ -128,10 +154,7 @@ class Grid:
 
         queue = deque([self.start_cube])
         previous_cube = {self.start_cube: None} # maps cube to the cube it came from
-        visited_cube = {self.start_cube}
-
-        self.visited_cubes.clear()
-        self.path_cubes.clear()
+        self.visited_cubes = ({self.start_cube})
 
         while queue:
             for event in pygame.event.get():
@@ -141,26 +164,26 @@ class Grid:
 
             current_cube = queue.popleft()
 
-            if current_cube == self.goal_cube: # found path to goal
-                path = []
-                while current_cube != self.start_cube:
-                    path.append(current_cube)
-                    current_cube = previous_cube[current_cube]
-                path.pop(0) # remove end from path
-                runtime = time.time() - start_time
-                self.save_statistics(len(path), len(self.visited_cubes) - 1, runtime, True) # -1 to remove goal
-                return path
-
             for neighbor in self.bfs_get_neighbors(*current_cube):
-                if neighbor not in visited_cube:
-                    visited_cube.add(neighbor)
+                if neighbor == self.goal_cube:
+                    self.visited_cubes.add(neighbor)
+                    path = []
+                    while current_cube != self.start_cube:
+                        path.append(current_cube)
+                        current_cube = previous_cube[current_cube]
+                    path.reverse() # start from start_cube
+                    runtime = time.time() - start_time
+                    self.save_statistics(len(path), len(self.visited_cubes) - 1, runtime, True) # -1 to remove start
+                    return path
+
+                if neighbor not in self.visited_cubes:
+                    self.visited_cubes.add(neighbor)  # track visited cubes
                     queue.append(neighbor)
                     previous_cube[neighbor] = current_cube
-                    self.grid[neighbor[1]][neighbor[0]].color = "blue"
-                    self.visited_cubes.add(neighbor)  # track visited cubes
+                    self.grid[neighbor[1]][neighbor[0]].color = "yellow"
                     rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
                     self.dirty_rects.append(rect)
-                    time.sleep(0.05)  # slow down time for algorithm animation
+                    #time.sleep(0.05)  # slow down time for algorithm animation
 
             self.grid[current_cube[1]][current_cube[0]].color = "yellow"
             rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
@@ -170,7 +193,7 @@ class Grid:
 
         print("No path found.")
         runtime = time.time() - start_time
-        self.save_statistics(0, len(self.visited_cubes), runtime, False)
+        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False) # -1 to remove start
         return None
 
     def clear_path(self):
@@ -183,16 +206,17 @@ class Grid:
         self.dirty_rects.clear()
 
     def save_statistics(self, path_length, visited_cubes, runtime, found_goal):
-        statistics = {
-            "path_length": path_length,
-            "visited_cubes": visited_cubes,
-            "runtime": runtime,
-            "found_goal" : found_goal
-        }
-        filename = f"logs/statistics_{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
-        with open(filename, 'w') as f:
-            json.dump(statistics, f)
-        print(f"Statistics saved to {filename}")
+        # statistics = {
+        #     "path_length": path_length,
+        #     "visited_cubes": visited_cubes,
+        #     "runtime": runtime,
+        #     "found_goal" : found_goal
+        # }
+        # filename = f"logs/statistics_{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
+        # with open(filename, 'w') as f:
+        #     json.dump(statistics, f)
+        #print(f"Statistics saved to {filename}")
+        print(f"Stats: path_len: {path_length}, visited_cubes: {visited_cubes}, runtime: {runtime}, found_goal: {found_goal}")
 
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
@@ -262,6 +286,9 @@ class InputField:
         text_surface = self.font.render(self.text, True, self.color)
         screen.blit(text_surface, (self.rect.x + 5, self.rect.y + 5))
 
+    def shift(self, window_width):
+        self.rect.x = window_width - 150
+
 class Dropdown:
     def __init__(self, x, y, width, height, font, options):
         self.rect = pygame.Rect(x, y, width, height)
@@ -299,6 +326,9 @@ class Dropdown:
         else:
             pygame.draw.rect(screen, "white", self.option_rect)
             self.option_rect = pygame.Rect(0, 0, 0, 0)
+
+    def shift(self, window_width):
+        self.rect.x = window_width - 350
 
 def load_image(file_path, size):
     image = pygame.image.load(file_path)
@@ -377,6 +407,8 @@ while running:
 
             screen = pygame.display.set_mode((new_window_width, new_window_height), pygame.RESIZABLE)
             center_x, center_y = grid.center_grid(new_window_width, new_window_height, int(cube_size * zoom_factor))
+            input_field.shift(new_window_width)
+            dropdown.shift(new_window_width)
             redraw_screen()
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -402,11 +434,13 @@ while running:
                     if toolbar.selected_tool == 6: # export grid
                         current_time = datetime.datetime.now()
                         timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
-                        grid.export_grid(f"maps/{grid.rows}x{grid.cols}_{timestamp}.json")
+                        grid.export_grid(f"maps/{grid.rows}x{grid.cols}_{timestamp}.txt")
                         print(f"Map: grid_{timestamp}.json saved in map folder")
                     if toolbar.selected_tool == 7: # import grid
-                        filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("JSON files", "*.json")])
+                        filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("Text files", "*.txt")])
                         if filename:
+                            grid.start_cube = None
+                            grid.goal_cube = None
                             grid.load_grid(filename)
                             center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                             redraw_screen()
