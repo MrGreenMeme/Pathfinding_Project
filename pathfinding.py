@@ -4,6 +4,7 @@ import json
 from tkinter import filedialog
 import datetime
 import time
+from collections import deque
 
 class Cube:
     def __init__(self, color="white", traversable=True):
@@ -19,10 +20,16 @@ class Grid:
         self.start_cube = None
         self.goal_cube = None
         self.dirty_rects = []
+        self.path_cubes = set()
+        self.visited_cubes = set()
 
     def draw_cube(self, screen, x, y, cube_size, offset_x, offset_y):
         cube = self.grid[y][x]
         rect = pygame.Rect(offset_x + x * cube_size, offset_y + y * cube_size, cube_size, cube_size)
+        if (x, y) == self.start_cube:
+            cube.color = "green"
+        elif (x, y) == self.goal_cube:
+            cube.color = "red"
         if cube.color != "white":
             pygame.draw.rect(screen, cube.color, rect)
         if cube_size > 2:
@@ -45,23 +52,35 @@ class Grid:
             if selected_tool == 0:
                 if self.start_cube:
                     old_x, old_y = self.start_cube
+                    self.start_cube = None
+                    self.grid[old_y][old_x].traversable = True
                     self.grid[old_y][old_x].color = "white"
                     self.dirty_rects.append(self.draw_cube(screen, old_x, old_y, cube_size, offset_x, offset_y))
                 self.start_cube = grid_x,grid_y
                 cube.color = "green"
+                self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
             elif selected_tool == 1:
                 if self.goal_cube:
                     old_x, old_y = self.goal_cube
+                    self.goal_cube = None
+                    self.grid[old_y][old_x].traversable = True
                     self.grid[old_y][old_x].color = "white"
                     self.dirty_rects.append(self.draw_cube(screen, old_x, old_y, cube_size, offset_x, offset_y))
                 self.goal_cube = grid_x,grid_y
                 cube.color = "red"
+                self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
             elif selected_tool == 2:
-                cube.color = "black"
+                cube.color = "grey"
                 cube.traversable = False
+                self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
             elif selected_tool == 3:
+                if (grid_x, grid_y)  == self.start_cube:
+                    self.start_cube = None
+                elif (grid_x, grid_y)  == self.goal_cube:
+                    self.goal_cube = None
                 cube.color = "white"
-            self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
+                cube.traversable = True
+                self.dirty_rects.append(self.draw_cube(screen, grid_x, grid_y, cube_size, offset_x, offset_y))
 
     def export_grid(self, filename):
         data = {
@@ -92,6 +111,88 @@ class Grid:
         self.start_cube = None
         self.goal_cube = None
 
+    def bfs_get_neighbors(self, x,y ):
+        neighbors = []
+        for (move_x, move_y) in [(-1, 0), (1, 0), (0, -1), (0, 1)]: # left, right, up, down
+            new_x, new_y = x + move_x, y + move_y
+            if 0 <= new_x < self.cols and 0 <= new_y < self.rows and self.grid[new_y][new_x].traversable:
+                neighbors.append((new_x, new_y))
+        return neighbors
+
+    def bfs(self, screen, cube_size, offset_x, offset_y):
+        start_time = time.time()
+
+        if not self.start_cube or not self.goal_cube:
+            print("Start or goal not set.")
+            return None
+
+        queue = deque([self.start_cube])
+        previous_cube = {self.start_cube: None} # maps cube to the cube it came from
+        visited_cube = {self.start_cube}
+
+        self.visited_cubes.clear()
+        self.path_cubes.clear()
+
+        while queue:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+
+            current_cube = queue.popleft()
+
+            if current_cube == self.goal_cube: # found path to goal
+                path = []
+                while current_cube != self.start_cube:
+                    path.append(current_cube)
+                    current_cube = previous_cube[current_cube]
+                path.pop(0) # remove end from path
+                runtime = time.time() - start_time
+                self.save_statistics(len(path), len(self.visited_cubes) - 1, runtime, True) # -1 to remove goal
+                return path
+
+            for neighbor in self.bfs_get_neighbors(*current_cube):
+                if neighbor not in visited_cube:
+                    visited_cube.add(neighbor)
+                    queue.append(neighbor)
+                    previous_cube[neighbor] = current_cube
+                    self.grid[neighbor[1]][neighbor[0]].color = "blue"
+                    self.visited_cubes.add(neighbor)  # track visited cubes
+                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
+                    self.dirty_rects.append(rect)
+                    time.sleep(0.05)  # slow down time for algorithm animation
+
+            self.grid[current_cube[1]][current_cube[0]].color = "yellow"
+            rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
+            self.dirty_rects.append(rect)
+            pygame.display.update(self.dirty_rects)
+            self.dirty_rects.clear()
+
+        print("No path found.")
+        runtime = time.time() - start_time
+        self.save_statistics(0, len(self.visited_cubes), runtime, False)
+        return None
+
+    def clear_path(self):
+        for (x, y) in self.path_cubes:
+            self.grid[y][x].color = "white"
+        for (x, y) in self.visited_cubes:
+            self.grid[y][x].color = "white"
+        self.path_cubes.clear()
+        self.visited_cubes.clear()
+        self.dirty_rects.clear()
+
+    def save_statistics(self, path_length, visited_cubes, runtime, found_goal):
+        statistics = {
+            "path_length": path_length,
+            "visited_cubes": visited_cubes,
+            "runtime": runtime,
+            "found_goal" : found_goal
+        }
+        filename = f"logs/statistics_{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
+        with open(filename, 'w') as f:
+            json.dump(statistics, f)
+        print(f"Statistics saved to {filename}")
 
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
@@ -215,7 +316,7 @@ pygame.display.set_caption("Pathfinding")
 # grid setup
 rows, cols = (15, 15)
 grid = Grid(rows, cols)
-cube_size = 50
+cube_size = 45
 
 # font setup
 font_input_field = pygame.font.Font(None, 32)
@@ -230,11 +331,12 @@ dropdown = Dropdown(window_width - 350, 10, 140, 30, font_drop_down, ["DFS", "BF
 # toolbar setup
 tool_size = 50
 flag_img = load_image('flag.png', tool_size)
+eraser_img = load_image('eraser.png', tool_size)
 play_img = load_image('play.png', tool_size)
+clear_img = load_image('clear.png', tool_size)
 save_img = load_image('save.png', tool_size)
 load_img = load_image('load.png', tool_size)
-eraser_img = load_image('eraser.png', tool_size)
-toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("eraser", eraser_img), ("play", play_img), ("save", save_img), ("load", load_img)], 50, 10)
+toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("eraser", eraser_img), ("play", play_img), ("clear", clear_img), ("save", save_img), ("load", load_img)], 50, 10)
 
 # zoom
 zoom_factor = 1.0
@@ -270,6 +372,7 @@ while running:
 
         elif event.type == pygame.VIDEORESIZE:
             new_window_width, new_window_height = event.size
+            window_width, window_height = new_window_width, new_window_height
             print("x: " +  str(new_window_width) + " y: " + str(new_window_height))
 
             screen = pygame.display.set_mode((new_window_width, new_window_height), pygame.RESIZABLE)
@@ -283,12 +386,25 @@ while running:
                     if toolbar.handle_click(x, y):
                         toolbar.draw_toolbar(screen)
                     print("Toolbar clicked")
-                    if toolbar.selected_tool == 5:
+                    if toolbar.selected_tool == 4: # start algo
+                        grid.clear_path()
+                        redraw_screen()
+                        if dropdown.selected == "BFS":
+                            path = grid.bfs(screen, int(cube_size * zoom_factor), center_x, center_y)
+                            if path:
+                                for (x,y) in path:
+                                    grid.grid[y][x].color = "purple"
+                                    grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
+                        redraw_screen()
+                    if toolbar.selected_tool == 5: # clear algo
+                        grid.clear_path()
+                        redraw_screen()
+                    if toolbar.selected_tool == 6: # export grid
                         current_time = datetime.datetime.now()
                         timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
-                        grid.export_grid(f"maps/grid_{timestamp}.json")
+                        grid.export_grid(f"maps/{grid.rows}x{grid.cols}_{timestamp}.json")
                         print(f"Map: grid_{timestamp}.json saved in map folder")
-                    if toolbar.selected_tool == 6:
+                    if toolbar.selected_tool == 7: # import grid
                         filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("JSON files", "*.json")])
                         if filename:
                             grid.load_grid(filename)
