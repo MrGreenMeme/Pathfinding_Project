@@ -1,10 +1,10 @@
 import pygame
 import os
-import json
 from tkinter import filedialog
 import datetime
 import time
 from collections import deque
+import logging
 
 class Cube:
     def __init__(self, color="white", traversable=True):
@@ -46,7 +46,7 @@ class Grid:
     def handle_click(self, x, y, cube_size, offset_x, offset_y, selected_tool):
         grid_x = (x - offset_x) // cube_size
         grid_y = (y - offset_y) // cube_size
-        print(f"x: {x} y: {y} grid_x: {grid_x} grid_y: {grid_y} selected_tool: {selected_tool}")
+        logging.debug(f"x: {x} y: {y} grid_x: {grid_x} grid_y: {grid_y} selected_tool: {selected_tool}")
         if 0 <= grid_x < self.cols and 0 <= grid_y < self.rows:
             cube = self.grid[grid_y][grid_x]
             if selected_tool == 0:
@@ -99,7 +99,7 @@ class Grid:
                     f.write('@' if not cube.traversable else '.')
                 f.write('\n')
 
-        print(f"Map saved under: {filename}")
+        logging.debug(f"Map saved under: {filename}")
 
     def load_grid(self, filename):
         with open(filename, 'r') as f:
@@ -128,7 +128,7 @@ class Grid:
                             self.grid[y][x].color = "white"
                     y += 1
 
-            print(f"Loaded map from: {filename}")
+            logging.debug(f"Loaded map from: {filename}")
 
     def resize(self, new_rows, new_cols):
         self.rows = new_rows
@@ -146,10 +146,10 @@ class Grid:
         return neighbors
 
     def bfs(self, screen, cube_size, offset_x, offset_y):
-        start_time = time.time()
+        start_time = time.perf_counter()
 
         if not self.start_cube or not self.goal_cube:
-            print("Start or goal not set.")
+            logging.info("Start or goal not set.")
             return None
 
         queue = deque([self.start_cube])
@@ -172,7 +172,7 @@ class Grid:
                         path.append(current_cube)
                         current_cube = previous_cube[current_cube]
                     path.reverse() # start from start_cube
-                    runtime = time.time() - start_time
+                    runtime = time.perf_counter() - start_time
                     self.save_statistics(len(path), len(self.visited_cubes) - 1, runtime, True) # -1 to remove start
                     return path
 
@@ -183,7 +183,6 @@ class Grid:
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
                     rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
                     self.dirty_rects.append(rect)
-                    #time.sleep(0.05)  # slow down time for algorithm animation
 
             self.grid[current_cube[1]][current_cube[0]].color = "yellow"
             rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
@@ -191,8 +190,8 @@ class Grid:
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
 
-        print("No path found.")
-        runtime = time.time() - start_time
+        logging.info("No path found.")
+        runtime = time.perf_counter() - start_time
         self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False) # -1 to remove start
         return None
 
@@ -215,8 +214,8 @@ class Grid:
         # filename = f"logs/statistics_{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
         # with open(filename, 'w') as f:
         #     json.dump(statistics, f)
-        #print(f"Statistics saved to {filename}")
-        print(f"Stats: path_len: {path_length}, visited_cubes: {visited_cubes}, runtime: {runtime}, found_goal: {found_goal}")
+        #logging.debug(f"Statistics saved to {filename}")
+        logging.info(f"Stats: path_len: {path_length}, visited_cubes: {visited_cubes}, runtime: {runtime}, found_goal: {found_goal}")
 
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
@@ -264,13 +263,13 @@ class InputField:
         elif event.type == pygame.KEYDOWN:
             if self.active:
                 if event.key == pygame.K_RETURN:
-                    print(f"Entered: {self.text}")
+                    logging.debug(f"Entered: {self.text}")
                     try:
                         new_rows, new_cols = map(int, self.text.lower().split('x'))
                         grid.resize(new_rows, new_cols)
                         redraw_screen()
                     except Exception:
-                        print("Format should be rowsxcols like 10x10")
+                        logging.info("Format should be rowsxcols like 10x10")
                     self.draw(screen)
                     self.text = ''
                 elif event.key == pygame.K_BACKSPACE:
@@ -322,7 +321,6 @@ class Dropdown:
                 option_text = self.font.render(option, True, "white")
                 screen.blit(option_text, (option_rect.x + 5, option_rect.y + 5))
             self.option_rect = pygame.Rect(self.rect.x, self.rect.y + self.rect.height, self.rect.width, self.rect.height * len(self.options))
-            print(f"optionsect{self.option_rect}")
         else:
             pygame.draw.rect(screen, "white", self.option_rect)
             self.option_rect = pygame.Rect(0, 0, 0, 0)
@@ -337,6 +335,9 @@ def load_image(file_path, size):
 
 # pygame setup
 pygame.init()
+
+# logging setup
+logging.basicConfig(level=logging.DEBUG, format='[%(levelname)s] %(asctime)s - %(message)s')
 
 # window setup
 window_width, window_height = 1000, 1000
@@ -376,6 +377,12 @@ zoom_increment = 0.05
 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
 
 # Initial draw of the entire grid
+
+def calculate_zoom_factor(window_width, window_height, grid_cols, grid_rows, cube_size):
+    required_zoom_x = window_width / (grid_cols * cube_size)
+    required_zoom_y = window_height / (grid_rows * cube_size)
+
+    return min(required_zoom_x, required_zoom_y)
 def redraw_screen():
     screen.fill("white")
     toolbar.draw_toolbar(screen)
@@ -403,7 +410,7 @@ while running:
         elif event.type == pygame.VIDEORESIZE:
             new_window_width, new_window_height = event.size
             window_width, window_height = new_window_width, new_window_height
-            print("x: " +  str(new_window_width) + " y: " + str(new_window_height))
+            logging.debug("New window_width: " +  str(new_window_width) + " new window_height: " + str(new_window_height))
 
             screen = pygame.display.set_mode((new_window_width, new_window_height), pygame.RESIZABLE)
             center_x, center_y = grid.center_grid(new_window_width, new_window_height, int(cube_size * zoom_factor))
@@ -417,7 +424,7 @@ while running:
                 if toolbar.toolbar_rect.collidepoint(event.pos):
                     if toolbar.handle_click(x, y):
                         toolbar.draw_toolbar(screen)
-                    print("Toolbar clicked")
+                    logging.debug("Toolbar clicked")
                     if toolbar.selected_tool == 4: # start algo
                         grid.clear_path()
                         redraw_screen()
@@ -435,13 +442,15 @@ while running:
                         current_time = datetime.datetime.now()
                         timestamp = current_time.strftime("%Y_%m_%d-%H_%M_%S")
                         grid.export_grid(f"maps/{grid.rows}x{grid.cols}_{timestamp}.txt")
-                        print(f"Map: grid_{timestamp}.json saved in map folder")
+                        logging.debug(f"Grid exported: grid_{timestamp}.json saved in map folder")
                     if toolbar.selected_tool == 7: # import grid
                         filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("Text files", "*.txt")])
                         if filename:
                             grid.start_cube = None
                             grid.goal_cube = None
                             grid.load_grid(filename)
+                            zoom_factor = calculate_zoom_factor(window_width, window_height, grid.cols, grid.rows, cube_size)
+                            logging.debug(f"Grid imported. Calculated zoom factor: {zoom_factor}")
                             center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                             redraw_screen()
                 elif dropdown.rect.collidepoint(event.pos) or dropdown.option_rect.collidepoint(event.pos):
@@ -472,11 +481,12 @@ while running:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_UP:
                 zoom_factor += zoom_increment
+                logging.debug(f"Zoomed in. New zoom factor: {zoom_factor}")
                 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                 redraw_screen()
             elif event.key == pygame.K_DOWN:
-                print(f"cubesize{int(cube_size * zoom_factor)}")
                 zoom_factor = max(zoom_increment, zoom_factor - zoom_increment)
+                logging.debug(f"Zoomed out. New zoom factor: {zoom_factor}")
                 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                 redraw_screen()
             input_field.handle_input(event)
@@ -495,6 +505,6 @@ while running:
     pygame.display.flip()
 
     clock.tick()
-    #print(round(clock.get_fps()))
+    #logging.debug(f"{clock.get_fps():.0f}")
 
 pygame.quit()
