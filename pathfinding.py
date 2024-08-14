@@ -138,7 +138,15 @@ class Grid:
         self.start_cube = None
         self.goal_cube = None
 
-    def bfs_get_neighbors(self, x, y):
+    def generate_path(self, previous_cube, current_cube):
+        path = [current_cube]
+        while current_cube in previous_cube:
+            current_cube = previous_cube[current_cube]
+            path.append(current_cube)
+        path.reverse()  # Start from start_cube
+        return path
+
+    def get_neighbors(self, x, y):
         neighbors = []
         for (move_x, move_y) in [(-1, 0), (1, 0), (0, -1), (0, 1)]: # left, right, up, down
             new_x, new_y = x + move_x, y + move_y
@@ -154,8 +162,8 @@ class Grid:
             return None
 
         queue = deque([self.start_cube])
-        previous_cube = {self.start_cube: None} # maps cube to the cube it came from
-        self.visited_cubes = ({self.start_cube})
+        previous_cube = {} # maps cube to the cube it came from
+        self.visited_cubes = {self.start_cube}
 
         while queue:
             for event in pygame.event.get():
@@ -165,22 +173,18 @@ class Grid:
 
             current_cube = queue.popleft()
 
-            for neighbor in self.bfs_get_neighbors(*current_cube):
-                if neighbor == self.goal_cube:
-                    self.visited_cubes.add(neighbor)
-                    path = []
-                    while current_cube != self.start_cube:
-                        path.append(current_cube)
-                        current_cube = previous_cube[current_cube]
-                    path.reverse() # start from start_cube
-                    runtime = time.perf_counter() - start_time
-                    self.save_statistics(len(path), len(self.visited_cubes) - 1, runtime, True) # -1 to remove start
-                    return path
+            if current_cube == self.goal_cube:
+                path = self.generate_path(previous_cube, current_cube)
+                runtime = time.perf_counter() - start_time
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, runtime, True, "BFS") # -1 to remove start
+                return path
+
+            for neighbor in self.get_neighbors(*current_cube):
 
                 if neighbor not in self.visited_cubes:
-                    self.visited_cubes.add(neighbor)  # track visited cubes
-                    queue.append(neighbor)
                     previous_cube[neighbor] = current_cube
+                    queue.append(neighbor)
+                    self.visited_cubes.add(neighbor)
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
                     rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
                     self.dirty_rects.append(rect)
@@ -193,7 +197,53 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False) # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False, "BFS") # -1 to remove start
+        return None
+
+    def dfs(self, screen, cube_size, offset_x, offset_y):
+        start_time = time.perf_counter()
+
+        if not self.start_cube or not self.goal_cube:
+            logging.info("Start or goal not set.")
+            return None
+
+        stack = [self.start_cube]
+        previous_cube = {}  # Maps cube to the cube it came from
+        self.visited_cubes = {self.start_cube}
+
+        while stack:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+
+            current_cube = stack.pop()
+
+            if current_cube == self.goal_cube:
+                path = self.generate_path(previous_cube, current_cube)
+                runtime = time.perf_counter() - start_time
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, runtime, True, "DFS")  # -1 to remove start
+                return path
+
+            for neighbor in self.get_neighbors(*current_cube):
+                if neighbor not in self.visited_cubes:
+                    previous_cube[neighbor] = current_cube
+                    stack.append(neighbor)
+                    self.visited_cubes.add(neighbor)
+                    self.grid[neighbor[1]][neighbor[0]].color = "yellow"
+                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
+                    self.dirty_rects.append(rect)
+
+            # Mark the current cube as processed
+            self.grid[current_cube[1]][current_cube[0]].color = "yellow"
+            rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
+            self.dirty_rects.append(rect)
+            pygame.display.update(self.dirty_rects)
+            self.dirty_rects.clear()
+
+        logging.info("No path found.")
+        runtime = time.perf_counter() - start_time
+        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False, "DFS")  # -1 to remove start
         return None
 
     def a_star_heurisitic(self, a, b):
@@ -208,8 +258,9 @@ class Grid:
 
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (f_score, node)
-        previous_cube = {self.start_cube: None} # maps cube to previous cube
-        g_score = {self.start_cube: 0}  # cost from start to this node
+        previous_cube = {} # maps cube to previous cube
+        g_score = {self.start_cube: 0}
+
         self.visited_cubes = {self.start_cube}
 
         while open_set:
@@ -220,24 +271,19 @@ class Grid:
 
             current_cube = heapq.heappop(open_set)[1] # get cube with lowest f_score
 
-            for neighbor in self.bfs_get_neighbors(*current_cube):
-                tentative_g_score = g_score[current_cube] + 1  # all edges have a weight of 1
+            if current_cube == self.goal_cube:
+                path = self.generate_path(previous_cube, current_cube)
+                runtime = time.perf_counter() - start_time
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, runtime, True, "A*")  # -2: remove start + goal || -1: remove start
+                return path
 
-                if neighbor == self.goal_cube:
-                    self.visited_cubes.add(neighbor)
-                    path = []
-                    while current_cube != self.start_cube:
-                        path.append(current_cube)
-                        current_cube = previous_cube[current_cube]
-                    path.reverse()  # Start from start_cube
-                    runtime = time.perf_counter() - start_time
-                    self.save_statistics(len(path), len(self.visited_cubes) - 1, runtime, True)  # -1 to remove start
-                    return path
+            for neighbor in self.get_neighbors(*current_cube):
+                temp_g_score = g_score[current_cube] + 1  # all edges have a weight of 1
 
-                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                if neighbor not in g_score or temp_g_score < g_score[neighbor]:
                     self.visited_cubes.add(neighbor)
-                    g_score[neighbor] = tentative_g_score
-                    f_score = tentative_g_score + self.a_star_heurisitic(neighbor, self.goal_cube) # f_score = heuristic (h_score) + g_score
+                    g_score[neighbor] = temp_g_score
+                    f_score = temp_g_score + self.a_star_heurisitic(neighbor, self.goal_cube) # f_score = heuristic (h_score) + g_score
                     heapq.heappush(open_set, (f_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
@@ -253,7 +299,7 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False)  # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False, "A*")  # -1 to remove start
         return None
 
     def clear_path(self):
@@ -261,7 +307,7 @@ class Grid:
             self.grid[y][x].color = "white"
         self.visited_cubes.clear()
 
-    def save_statistics(self, path_length, visited_cubes, runtime, found_goal):
+    def save_statistics(self, path_length, visited_cubes, runtime, found_goal, algorithm):
         # statistics = {
         #     "path_length": path_length,
         #     "visited_cubes": visited_cubes,
@@ -272,8 +318,7 @@ class Grid:
         # with open(filename, 'w') as f:
         #     json.dump(statistics, f)
         #logging.debug(f"Statistics saved to {filename}")
-        logging.info(f"Stats: path_len: {path_length}, visited_cubes: {visited_cubes}, runtime: {runtime}, found_goal: {found_goal}")
-
+        logging.info(f"Stats: {algorithm} => path_len: {path_length}, visited_cubes: {visited_cubes}, runtime: {runtime}, found_goal: {found_goal}")
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
         self.toolbar_rect = pygame.Rect(0, 0, (tool_size + tool_spacing) * len(tools), tool_size)
@@ -505,6 +550,12 @@ def main():
                                     for (x,y) in path:
                                         grid.grid[y][x].color = "purple"
                                         grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
+                            elif dropdown.selected == "DFS":
+                                path = grid.dfs(screen, int(cube_size * zoom_factor), center_x, center_y)
+                                if path:
+                                    for (x,y) in path:
+                                        grid.grid[y][x].color = "purple"
+                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
                         if toolbar.selected_tool == 5: # clear algo
                             grid.clear_path()
                             redraw_screen()
@@ -518,7 +569,7 @@ def main():
                             if filename:
                                 grid.start_cube = None
                                 grid.goal_cube = None
-                                grid.visited_cubes = []
+                                grid.visited_cubes.clear()
                                 grid.load_grid(filename)
                                 zoom_factor = calculate_zoom_factor(window_width, window_height, grid.cols, grid.rows, cube_size)
                                 logging.debug(f"Grid imported. Calculated zoom factor: {zoom_factor}")
