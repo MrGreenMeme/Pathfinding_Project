@@ -8,12 +8,12 @@ import logging
 import heapq
 import cProfile
 import pstats
+import csv
 
 class Cube:
     def __init__(self, color="white", traversable=True):
         self.color = color
         self.traversable = traversable
-
 class Grid:
     def __init__(self, rows, cols):
         self.rows = rows
@@ -24,6 +24,7 @@ class Grid:
         self.dirty_rects = []
         self.path_cubes = set()
         self.visited_cubes = set()
+        self.current_map_file = None
 
     def draw_cube(self, screen, x, y, cube_size, offset_x, offset_y):
         rect = pygame.Rect(offset_x + x * cube_size, offset_y + y * cube_size, cube_size, cube_size)
@@ -101,6 +102,7 @@ class Grid:
             for line in generate_grid_data():
                 f.write(line)
 
+        self.current_map_file = filename.rsplit('/',1)[1]
         logging.debug(f"Map saved under: {filename}")
     def load_grid(self, filename):
         with open(filename, 'r') as f:
@@ -109,6 +111,7 @@ class Grid:
             self.rows = int(lines[0].split()[1])
             self.cols = int(lines[1].split()[1])
             self.grid = [[Cube() for _ in range(self.cols)] for _ in range(self.rows)]
+            self.current_map_file = filename.rsplit('/',1)[1]
 
             y = 0
             for line in lines[2:]:
@@ -155,28 +158,29 @@ class Grid:
         return neighbors
 
     def bfs(self, screen, cube_size, offset_x, offset_y):
-        start_time = time.perf_counter()
-
         if not self.start_cube or not self.goal_cube:
             logging.info("Start or goal not set.")
             return None
 
+        start_time = time.perf_counter()
+
         queue = deque([self.start_cube])
         previous_cube = {} # maps cube to the cube it came from
         self.visited_cubes = {self.start_cube}
-
+        max_queue_size = 1
         while queue:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return
 
+            max_queue_size = max(1, len(queue))
             current_cube = queue.popleft()
 
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, runtime, True, "BFS") # -1 to remove start
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "BFS", self.current_map_file) # -1 to remove start
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -189,40 +193,38 @@ class Grid:
                     rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
                     self.dirty_rects.append(rect)
 
-            self.grid[current_cube[1]][current_cube[0]].color = "yellow"
-            rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
-            self.dirty_rects.append(rect)
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False, "BFS") # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "BFS", self.current_map_file) # -1 to remove start
         return None
 
     def dfs(self, screen, cube_size, offset_x, offset_y):
-        start_time = time.perf_counter()
-
         if not self.start_cube or not self.goal_cube:
             logging.info("Start or goal not set.")
             return None
 
+        start_time = time.perf_counter()
+
         stack = [self.start_cube]
         previous_cube = {}  # Maps cube to the cube it came from
         self.visited_cubes = {self.start_cube}
-
+        max_queue_size = 1
         while stack:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return
 
+            max_queue_size = max(1, len(stack))
             current_cube = stack.pop()
 
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, runtime, True, "DFS")  # -1 to remove start
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "DFS", self.current_map_file)  # -1 to remove start
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -234,47 +236,43 @@ class Grid:
                     rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
                     self.dirty_rects.append(rect)
 
-            # Mark the current cube as processed
-            self.grid[current_cube[1]][current_cube[0]].color = "yellow"
-            rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
-            self.dirty_rects.append(rect)
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False, "DFS")  # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "DFS", self.current_map_file)  # -1 to remove start
         return None
 
-    def a_star_heurisitic(self, a, b):
+    def heurisitic(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1]) # manhattan distance
 
     def a_star(self, screen, cube_size, offset_x, offset_y):
-        start_time = time.perf_counter()
-
         if not self.start_cube or not self.goal_cube:
             logging.info("Start or goal not set.")
             return None
 
+        start_time = time.perf_counter()
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (f_score, node)
         previous_cube = {} # maps cube to previous cube
         g_score = {self.start_cube: 0}
 
         self.visited_cubes = {self.start_cube}
-
+        max_queue_size = 1
         while open_set:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     return
 
+            max_queue_size = max(max_queue_size, len(open_set))
             current_cube = heapq.heappop(open_set)[1] # get cube with lowest f_score
 
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, runtime, True, "A*")  # -2: remove start + goal || -1: remove start
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size ,runtime, True, "A*", self.current_map_file)  # -2: remove start + goal || -1: remove start
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -283,23 +281,113 @@ class Grid:
                 if neighbor not in g_score or temp_g_score < g_score[neighbor]:
                     self.visited_cubes.add(neighbor)
                     g_score[neighbor] = temp_g_score
-                    f_score = temp_g_score + self.a_star_heurisitic(neighbor, self.goal_cube) # f_score = heuristic (h_score) + g_score
+                    f_score = temp_g_score + self.heurisitic(neighbor, self.goal_cube) # f_score = heuristic (h_score) + g_score
                     heapq.heappush(open_set, (f_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
                     rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
                     self.dirty_rects.append(rect)
 
-            # Mark the current cube as processed
-            self.grid[current_cube[1]][current_cube[0]].color = "yellow"
-            rect = self.draw_cube(screen, current_cube[0], current_cube[1], cube_size, offset_x, offset_y)
-            self.dirty_rects.append(rect)
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, runtime, False, "A*")  # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "A*", self.current_map_file)  # -1 to remove start
+        return None
+
+    def dijkstra(self, screen, cube_size, offset_x, offset_y):
+        if not self.start_cube or not self.goal_cube:
+            logging.info("Start or goal not set.")
+            return None
+
+        start_time = time.perf_counter()
+        open_set = []
+        heapq.heappush(open_set, (0, self.start_cube))  # (g_score, node)
+        previous_cube = {} # maps cube to previous cube
+        g_score = {self.start_cube: 0}
+
+        self.visited_cubes = {self.start_cube}
+        max_queue_size = 1
+        while open_set:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+
+            max_queue_size = max(max_queue_size, len(open_set))
+            current_cube = heapq.heappop(open_set)[1] # get cube with lowest g_score
+
+            if current_cube == self.goal_cube:
+                path = self.generate_path(previous_cube, current_cube)
+                runtime = time.perf_counter() - start_time
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "Dijkstra", self.current_map_file)
+                return path
+
+            for neighbor in self.get_neighbors(*current_cube):
+                temp_g_score = g_score[current_cube] + 1  # all edges have a weight of 1
+
+                if neighbor not in g_score or temp_g_score < g_score[neighbor]:
+                    self.visited_cubes.add(neighbor)
+                    g_score[neighbor] = temp_g_score
+                    heapq.heappush(open_set, (temp_g_score, neighbor))
+                    previous_cube[neighbor] = current_cube
+                    self.grid[neighbor[1]][neighbor[0]].color = "yellow"
+                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
+                    self.dirty_rects.append(rect)
+
+            pygame.display.update(self.dirty_rects)
+            self.dirty_rects.clear()
+
+        logging.info("No path found.")
+        runtime = time.perf_counter() - start_time
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "Dijkstra", self.current_map_file)
+        return None
+
+    def greedy_best_first_search(self, screen, cube_size, offset_x, offset_y):
+        if not self.start_cube or not self.goal_cube:
+            logging.info("Start or goal not set.")
+            return None
+
+        logging.debug("clicked")
+        start_time = time.perf_counter()
+        open_set = []
+        heapq.heappush(open_set, (0, self.start_cube))  # (h_score, node)
+        previous_cube = {} # maps cube to previous cube
+
+        self.visited_cubes = {self.start_cube}
+        max_queue_size = 1
+        while open_set:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    return
+
+            max_queue_size = max(max_queue_size, len(open_set))
+            current_cube = heapq.heappop(open_set)[1] # get cube with lowest h_score
+
+            if current_cube == self.goal_cube:
+                path = self.generate_path(previous_cube, current_cube)
+                runtime = time.perf_counter() - start_time
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "Greedy-BeFs", self.current_map_file)
+                return path
+
+            for neighbor in self.get_neighbors(*current_cube):
+                if neighbor not in self.visited_cubes:
+                    self.visited_cubes.add(neighbor)
+                    h_score = self.heurisitic(neighbor, self.goal_cube)
+                    heapq.heappush(open_set, (h_score, neighbor))
+                    previous_cube[neighbor] = current_cube
+                    self.grid[neighbor[1]][neighbor[0]].color = "yellow"
+                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
+                    self.dirty_rects.append(rect)
+
+            pygame.display.update(self.dirty_rects)
+            self.dirty_rects.clear()
+
+        logging.info("No path found.")
+        runtime = time.perf_counter() - start_time
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "Greedy-BeFs", self.current_map_file)
         return None
 
     def clear_path(self):
@@ -307,18 +395,11 @@ class Grid:
             self.grid[y][x].color = "white"
         self.visited_cubes.clear()
 
-    def save_statistics(self, path_length, visited_cubes, runtime, found_goal, algorithm):
-        # statistics = {
-        #     "path_length": path_length,
-        #     "visited_cubes": visited_cubes,
-        #     "runtime": runtime,
-        #     "found_goal" : found_goal
-        # }
-        # filename = f"logs/statistics_{datetime.datetime.now().strftime('%Y_%m_%d-%H_%M_%S')}.json"
-        # with open(filename, 'w') as f:
-        #     json.dump(statistics, f)
-        #logging.debug(f"Statistics saved to {filename}")
-        logging.info(f"Stats: {algorithm} => path_len: {path_length}, visited_cubes: {visited_cubes}, runtime: {runtime}, found_goal: {found_goal}")
+    def save_statistics(self, path_length, visited_cubes, max_queue_size, runtime, found_goal, algorithm, current_map_file, filename="results.csv"):
+        with open(filename, 'a', newline='') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerow([algorithm, path_length, visited_cubes, max_queue_size, runtime, found_goal, current_map_file if current_map_file else 'not found'])
+        logging.info(f"Stats: {algorithm} => path_len: {path_length}, visited_cubes: {visited_cubes}, max_queue_size: {max_queue_size}, runtime: {runtime}, found_goal: {found_goal}, map: {current_map_file if current_map_file else 'na'}")
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
         self.toolbar_rect = pygame.Rect(0, 0, (tool_size + tool_spacing) * len(tools), tool_size)
@@ -470,7 +551,7 @@ def main():
     input_field = InputField(window_width - 150, 10, 140, 32, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
 
     # dropdown setup
-    dropdown = Dropdown(window_width - 350, 10, 140, 30, font_drop_down, ["DFS", "BFS", "A*"])
+    dropdown = Dropdown(window_width - 350, 10, 140, 30, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"])
 
     # toolbar setup
     def load_image(file_path, size):
@@ -511,6 +592,7 @@ def main():
     mouse_down = False
 
     while running:
+        clock.tick(60)
         # poll for events
         # pygame.QUIT event means the user clicked X to close your window
         for event in pygame.event.get():
@@ -552,6 +634,18 @@ def main():
                                         grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
                             elif dropdown.selected == "DFS":
                                 path = grid.dfs(screen, int(cube_size * zoom_factor), center_x, center_y)
+                                if path:
+                                    for (x,y) in path:
+                                        grid.grid[y][x].color = "purple"
+                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
+                            elif dropdown.selected == "Dijkstra":
+                                path = grid.dijkstra(screen, int(cube_size * zoom_factor), center_x, center_y)
+                                if path:
+                                    for (x,y) in path:
+                                        grid.grid[y][x].color = "purple"
+                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
+                            elif dropdown.selected == "Greedy-BeFs":
+                                path = grid.greedy_best_first_search(screen, int(cube_size * zoom_factor), center_x, center_y)
                                 if path:
                                     for (x,y) in path:
                                         grid.grid[y][x].color = "purple"
@@ -624,9 +718,6 @@ def main():
         if grid.dirty_rects:
             pygame.display.flip()
             grid.dirty_rects.clear()
-
-        clock.tick()
-        #logging.debug(f"{clock.get_fps():.0f}")
 
     pygame.quit()
 
