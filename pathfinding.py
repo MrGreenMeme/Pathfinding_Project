@@ -158,9 +158,6 @@ class Grid:
         return neighbors
 
     def bfs(self, screen, cube_size, offset_x, offset_y):
-        if not self.start_cube or not self.goal_cube:
-            logging.info("Start or goal not set.")
-            return None
 
         start_time = time.perf_counter()
 
@@ -202,9 +199,6 @@ class Grid:
         return None
 
     def dfs(self, screen, cube_size, offset_x, offset_y):
-        if not self.start_cube or not self.goal_cube:
-            logging.info("Start or goal not set.")
-            return None
 
         start_time = time.perf_counter()
 
@@ -244,15 +238,13 @@ class Grid:
         self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "DFS", self.current_map_file)  # -1 to remove start
         return None
 
-    def heurisitic(self, a, b):
+    def heuristic(self, a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1]) # manhattan distance
 
     def a_star(self, screen, cube_size, offset_x, offset_y):
-        if not self.start_cube or not self.goal_cube:
-            logging.info("Start or goal not set.")
-            return None
 
         start_time = time.perf_counter()
+
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (f_score, node)
         previous_cube = {} # maps cube to previous cube
@@ -281,7 +273,7 @@ class Grid:
                 if neighbor not in g_score or temp_g_score < g_score[neighbor]:
                     self.visited_cubes.add(neighbor)
                     g_score[neighbor] = temp_g_score
-                    f_score = temp_g_score + self.heurisitic(neighbor, self.goal_cube) # f_score = heuristic (h_score) + g_score
+                    f_score = temp_g_score + self.heuristic(neighbor, self.goal_cube) # f_score = heuristic (h_score) + g_score
                     heapq.heappush(open_set, (f_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
@@ -297,11 +289,9 @@ class Grid:
         return None
 
     def dijkstra(self, screen, cube_size, offset_x, offset_y):
-        if not self.start_cube or not self.goal_cube:
-            logging.info("Start or goal not set.")
-            return None
 
         start_time = time.perf_counter()
+
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (g_score, node)
         previous_cube = {} # maps cube to previous cube
@@ -345,12 +335,9 @@ class Grid:
         return None
 
     def greedy_best_first_search(self, screen, cube_size, offset_x, offset_y):
-        if not self.start_cube or not self.goal_cube:
-            logging.info("Start or goal not set.")
-            return None
 
-        logging.debug("clicked")
         start_time = time.perf_counter()
+
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (h_score, node)
         previous_cube = {} # maps cube to previous cube
@@ -375,7 +362,7 @@ class Grid:
             for neighbor in self.get_neighbors(*current_cube):
                 if neighbor not in self.visited_cubes:
                     self.visited_cubes.add(neighbor)
-                    h_score = self.heurisitic(neighbor, self.goal_cube)
+                    h_score = self.heuristic(neighbor, self.goal_cube)
                     heapq.heappush(open_set, (h_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
@@ -544,14 +531,14 @@ def main():
     cube_size = 45
 
     # font setup
-    font_input_field = pygame.font.Font(None, 32)
-    font_drop_down = pygame.font.Font(None, 30)
+    font_input_field = pygame.font.Font(None, 28)
+    font_drop_down = pygame.font.Font(None, 24)
 
     # input field setup
-    input_field = InputField(window_width - 150, 10, 140, 32, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
+    input_field = InputField(window_width - 150, 10, 120, 30, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
 
     # dropdown setup
-    dropdown = Dropdown(window_width - 350, 10, 140, 30, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"])
+    dropdown = Dropdown(window_width - 350, 10, 120, 25, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"])
 
     # toolbar setup
     def load_image(file_path, size):
@@ -569,6 +556,11 @@ def main():
     toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("eraser", eraser_img), ("play", play_img), ("clear", clear_img), ("save", save_img), ("load", load_img)], 50, 10)
 
     # zoom
+    def calculate_zoom_factor(window_width, window_height, grid_cols, grid_rows, cube_size):
+        required_zoom_x = window_width / (grid_cols * cube_size)
+        required_zoom_y = window_height / (grid_rows * cube_size)
+        return min(required_zoom_x, required_zoom_y)
+
     zoom_factor = 1.0
     zoom_increment = 0.05
 
@@ -576,20 +568,29 @@ def main():
     center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
 
     # Initial draw of the entire grid
-
-    def calculate_zoom_factor(window_width, window_height, grid_cols, grid_rows, cube_size):
-        required_zoom_x = window_width / (grid_cols * cube_size)
-        required_zoom_y = window_height / (grid_rows * cube_size)
-
-        return min(required_zoom_x, required_zoom_y)
-
-
     redraw_screen()
 
     # Game loop
     clock = pygame.time.Clock()
     running = True
     mouse_down = False
+
+    # Algorithms
+
+    def run_algorithm(grid, algorithm, screen, cube_size, center_x, center_y):
+        pathfinding_algorithms = {
+            "BFS": grid.bfs,
+            "A*": grid.a_star,
+            "DFS": grid.dfs,
+            "Dijkstra": grid.dijkstra,
+            "Greedy-BeFs": grid.greedy_best_first_search
+        }
+        if algorithm in pathfinding_algorithms:
+            path = pathfinding_algorithms[algorithm](screen, cube_size, center_x, center_y)
+            if path:
+                for (x, y) in path:
+                    grid.grid[y][x].color = "purple"
+                    grid.dirty_rects.append(grid.draw_cube(screen, x, y, cube_size, center_x, center_y))
 
     while running:
         clock.tick(60)
@@ -620,36 +621,8 @@ def main():
                         if toolbar.selected_tool == 4: # start algo
                             grid.clear_path()
                             redraw_screen()
-                            if dropdown.selected == "BFS":
-                                path = grid.bfs(screen, int(cube_size * zoom_factor), center_x, center_y)
-                                if path:
-                                    for (x,y) in path:
-                                        grid.grid[y][x].color = "purple"
-                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
-                            elif dropdown.selected == "A*":
-                                path = grid.a_star(screen, int(cube_size * zoom_factor), center_x, center_y)
-                                if path:
-                                    for (x,y) in path:
-                                        grid.grid[y][x].color = "purple"
-                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
-                            elif dropdown.selected == "DFS":
-                                path = grid.dfs(screen, int(cube_size * zoom_factor), center_x, center_y)
-                                if path:
-                                    for (x,y) in path:
-                                        grid.grid[y][x].color = "purple"
-                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
-                            elif dropdown.selected == "Dijkstra":
-                                path = grid.dijkstra(screen, int(cube_size * zoom_factor), center_x, center_y)
-                                if path:
-                                    for (x,y) in path:
-                                        grid.grid[y][x].color = "purple"
-                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
-                            elif dropdown.selected == "Greedy-BeFs":
-                                path = grid.greedy_best_first_search(screen, int(cube_size * zoom_factor), center_x, center_y)
-                                if path:
-                                    for (x,y) in path:
-                                        grid.grid[y][x].color = "purple"
-                                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y))
+                            if dropdown.selected in ["BFS", "A*", "DFS", "Dijkstra", "Greedy-BeFs"] and grid.start_cube and grid.goal_cube:
+                                run_algorithm(grid, dropdown.selected, screen, int(cube_size * zoom_factor), center_x, center_y)
                         if toolbar.selected_tool == 5: # clear algo
                             grid.clear_path()
                             redraw_screen()
@@ -722,6 +695,7 @@ def main():
     pygame.quit()
 
 if __name__ == '__main__':
-    cProfile.run('main()', 'profiling_results.prof')
-    p = pstats.Stats('profiling_results.prof')
-    p.strip_dirs().sort_stats('time').print_stats(10)
+    main()
+    # cProfile.run('main()', 'profiling_results.prof')
+    # p = pstats.Stats('profiling_results.prof')
+    # p.strip_dirs().sort_stats('time').print_stats(10)
