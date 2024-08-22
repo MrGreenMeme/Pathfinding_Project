@@ -28,13 +28,14 @@ class Grid:
 
     def draw_cube(self, screen, x, y, cube_size, offset_x, offset_y):
         rect = pygame.Rect(offset_x + x * cube_size, offset_y + y * cube_size, cube_size, cube_size)
+        color = self.grid[y][x].color
         if (x, y) == self.start_cube:
-            self.grid[y][x].color = "green"
+            color = "green"
         elif (x, y) == self.goal_cube:
-            self.grid[y][x].color = "red"
-        if self.grid[y][x].color != "white":
-            pygame.draw.rect(screen, self.grid[y][x].color, rect)
-        if cube_size > 2:
+            color = "red"
+        if color != "white":
+            pygame.draw.rect(screen, color, rect)
+        if cube_size > 9:
             pygame.draw.rect(screen, "black", rect, 1)
         return rect
 
@@ -141,7 +142,8 @@ class Grid:
         self.start_cube = None
         self.goal_cube = None
 
-    def generate_path(self, previous_cube, current_cube):
+    @staticmethod
+    def generate_path(previous_cube, current_cube):
         path = [current_cube]
         while current_cube in previous_cube:
             current_cube = previous_cube[current_cube]
@@ -158,9 +160,7 @@ class Grid:
         return neighbors
 
     def bfs(self, screen, cube_size, offset_x, offset_y):
-
         start_time = time.perf_counter()
-
         queue = deque([self.start_cube])
         previous_cube = {} # maps cube to the cube it came from
         self.visited_cubes = {self.start_cube}
@@ -181,7 +181,6 @@ class Grid:
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
-
                 if neighbor not in self.visited_cubes:
                     previous_cube[neighbor] = current_cube
                     queue.append(neighbor)
@@ -199,9 +198,7 @@ class Grid:
         return None
 
     def dfs(self, screen, cube_size, offset_x, offset_y):
-
         start_time = time.perf_counter()
-
         stack = [self.start_cube]
         previous_cube = {}  # Maps cube to the cube it came from
         self.visited_cubes = {self.start_cube}
@@ -238,18 +235,16 @@ class Grid:
         self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "DFS", self.current_map_file)  # -1 to remove start
         return None
 
-    def heuristic(self, a, b):
+    @staticmethod
+    def heuristic(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1]) # manhattan distance
 
     def a_star(self, screen, cube_size, offset_x, offset_y):
-
         start_time = time.perf_counter()
-
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (f_score, node)
         previous_cube = {} # maps cube to previous cube
         g_score = {self.start_cube: 0}
-
         self.visited_cubes = {self.start_cube}
         max_queue_size = 1
         while open_set:
@@ -269,7 +264,6 @@ class Grid:
 
             for neighbor in self.get_neighbors(*current_cube):
                 temp_g_score = g_score[current_cube] + 1  # all edges have a weight of 1
-
                 if neighbor not in g_score or temp_g_score < g_score[neighbor]:
                     self.visited_cubes.add(neighbor)
                     g_score[neighbor] = temp_g_score
@@ -289,14 +283,11 @@ class Grid:
         return None
 
     def dijkstra(self, screen, cube_size, offset_x, offset_y):
-
         start_time = time.perf_counter()
-
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (g_score, node)
         previous_cube = {} # maps cube to previous cube
         g_score = {self.start_cube: 0}
-
         self.visited_cubes = {self.start_cube}
         max_queue_size = 1
         while open_set:
@@ -316,7 +307,6 @@ class Grid:
 
             for neighbor in self.get_neighbors(*current_cube):
                 temp_g_score = g_score[current_cube] + 1  # all edges have a weight of 1
-
                 if neighbor not in g_score or temp_g_score < g_score[neighbor]:
                     self.visited_cubes.add(neighbor)
                     g_score[neighbor] = temp_g_score
@@ -335,13 +325,10 @@ class Grid:
         return None
 
     def greedy_best_first_search(self, screen, cube_size, offset_x, offset_y):
-
         start_time = time.perf_counter()
-
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (h_score, node)
         previous_cube = {} # maps cube to previous cube
-
         self.visited_cubes = {self.start_cube}
         max_queue_size = 1
         while open_set:
@@ -382,7 +369,8 @@ class Grid:
             self.grid[y][x].color = "white"
         self.visited_cubes.clear()
 
-    def save_statistics(self, path_length, visited_cubes, max_queue_size, runtime, found_goal, algorithm, current_map_file, filename="results.csv"):
+    @staticmethod
+    def save_statistics(path_length, visited_cubes, max_queue_size, runtime, found_goal, algorithm, current_map_file, filename="results.csv"):
         with open(filename, 'a', newline='') as f:
             writer = csv.writer(f, delimiter=';')
             writer.writerow([algorithm, path_length, visited_cubes, max_queue_size, runtime, found_goal, current_map_file if current_map_file else 'not found'])
@@ -407,13 +395,15 @@ class Toolbar:
                 pygame.draw.rect(screen, tool[1], tool_rect)
             if i == self.selected_tool:
                 pygame.draw.rect(screen, "black", tool_rect, 3)
-
         pygame.display.update(self.toolbar_rect)
 
     def handle_click(self, x, y):
         for i, tool_rect in enumerate(self.tool_rects):
             if tool_rect.collidepoint(x, y):
-                self.selected_tool = i
+                if self.selected_tool == i:
+                    self.selected_tool = None
+                else:
+                    self.selected_tool = i
                 return True
         return False
 
@@ -515,6 +505,7 @@ def main():
     screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE)
     pygame.display.set_caption("Pathfinding")
     def redraw_screen():
+        start_time = time.perf_counter()
         screen.fill("white")
         toolbar.draw_toolbar(screen)
         input_field.draw(screen)
@@ -523,7 +514,7 @@ def main():
             for x in range(grid.cols):
                 grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
         pygame.display.flip()
-        logging.debug("Screen redrawn")
+        logging.debug(f"Screen redrawn + {time.perf_counter() - start_time}")
 
     # grid setup
     rows, cols = (15, 15)
@@ -574,9 +565,11 @@ def main():
     clock = pygame.time.Clock()
     running = True
     mouse_down = False
+    move_grid = False
+    move_grid_x = 0
+    move_grid_y = 0
 
     # Algorithms
-
     def run_algorithm(grid, algorithm, screen, cube_size, center_x, center_y):
         pathfinding_algorithms = {
             "BFS": grid.bfs,
@@ -642,6 +635,7 @@ def main():
                                 logging.debug(f"Grid imported. Calculated zoom factor: {zoom_factor}")
                                 center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                                 redraw_screen()
+                                toolbar.selected_tool = None
                     elif dropdown.rect.collidepoint(event.pos) or dropdown.option_rect.collidepoint(event.pos): # dropdown
                         dropdown.handle_click(event)
                         dropdown.draw(screen)
@@ -655,27 +649,41 @@ def main():
                         input_field.draw(screen)
                         dropdown.open = False
                         dropdown.draw(screen)
-                        grid.handle_click(x, y, screen, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
+                        if toolbar.selected_tool is None:
+                            move_grid_x, move_grid_y = event.pos
+                            move_grid = True
+                        else:
+                            grid.handle_click(x, y, screen, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
 
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
                     mouse_down = False
+                    if move_grid:
+                        redraw_screen()
+                    move_grid = False
 
             elif event.type == pygame.MOUSEMOTION:
                 if mouse_down:
                     x,y = event.pos
-                    if y > toolbar.tool_size:
+                    if move_grid:
+                        shift_x = x - move_grid_x
+                        shift_y = y - move_grid_y
+                        center_x += shift_x
+                        center_y += shift_y
+                        move_grid_x = x
+                        move_grid_y = y
+                    else:
                         grid.handle_click(x, y, screen, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
                     zoom_factor += zoom_increment
-                    logging.debug(f"Zoomed in. New zoom factor: {zoom_factor}")
+                    logging.debug(f"Zoomed in. New zoom factor: {zoom_factor} + {int(cube_size * zoom_factor)}")
                     center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                     redraw_screen()
                 elif event.key == pygame.K_DOWN:
                     zoom_factor = max(zoom_increment, zoom_factor - zoom_increment)
-                    logging.debug(f"Zoomed out. New zoom factor: {zoom_factor}")
+                    logging.debug(f"Zoomed out. New zoom factor: {zoom_factor} + {int(cube_size * zoom_factor)}")
                     center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
                     redraw_screen()
                 input_field.handle_input(event, screen, grid)
@@ -695,7 +703,7 @@ def main():
     pygame.quit()
 
 if __name__ == '__main__':
-    main()
-    # cProfile.run('main()', 'profiling_results.prof')
-    # p = pstats.Stats('profiling_results.prof')
-    # p.strip_dirs().sort_stats('time').print_stats(10)
+    #main()
+    cProfile.run('main()', 'profiling_results.prof')
+    p = pstats.Stats('profiling_results.prof')
+    p.strip_dirs().sort_stats('time').print_stats(10)
