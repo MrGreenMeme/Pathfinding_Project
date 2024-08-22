@@ -8,6 +8,7 @@ import logging
 import heapq
 import cProfile
 import pstats
+import tracemalloc
 import csv
 
 class Cube:
@@ -186,8 +187,7 @@ class Grid:
                     queue.append(neighbor)
                     self.visited_cubes.add(neighbor)
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
-                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
-                    self.dirty_rects.append(rect)
+                    self.dirty_rects.append(self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y))
 
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
@@ -224,8 +224,7 @@ class Grid:
                     stack.append(neighbor)
                     self.visited_cubes.add(neighbor)
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
-                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
-                    self.dirty_rects.append(rect)
+                    self.dirty_rects.append(self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y))
 
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
@@ -271,8 +270,7 @@ class Grid:
                     heapq.heappush(open_set, (f_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
-                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
-                    self.dirty_rects.append(rect)
+                    self.dirty_rects.append(self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y))
 
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
@@ -313,8 +311,7 @@ class Grid:
                     heapq.heappush(open_set, (temp_g_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
-                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
-                    self.dirty_rects.append(rect)
+                    self.dirty_rects.append(self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y))
 
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
@@ -353,8 +350,7 @@ class Grid:
                     heapq.heappush(open_set, (h_score, neighbor))
                     previous_cube[neighbor] = current_cube
                     self.grid[neighbor[1]][neighbor[0]].color = "yellow"
-                    rect = self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y)
-                    self.dirty_rects.append(rect)
+                    self.dirty_rects.append(self.draw_cube(screen, neighbor[0], neighbor[1], cube_size, offset_x, offset_y))
 
             pygame.display.update(self.dirty_rects)
             self.dirty_rects.clear()
@@ -375,6 +371,12 @@ class Grid:
             writer = csv.writer(f, delimiter=';')
             writer.writerow([algorithm, path_length, visited_cubes, max_queue_size, runtime, found_goal, current_map_file if current_map_file else 'not found'])
         logging.info(f"Stats: {algorithm} => path_len: {path_length}, visited_cubes: {visited_cubes}, max_queue_size: {max_queue_size}, runtime: {runtime}, found_goal: {found_goal}, map: {current_map_file if current_map_file else 'na'}")
+
+    @staticmethod
+    def save_memory_statistics(stat, algorithm, map_file, filename="memory-consumption.csv"):
+        with open(filename, 'a', newline='') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerow([algorithm, map_file if map_file else 'not found', stat.size / 1024, stat.count, stat.size / stat.count])
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
         self.toolbar_rect = pygame.Rect(0, 0, (tool_size + tool_spacing) * len(tools), tool_size)
@@ -493,7 +495,7 @@ class Dropdown:
     def shift(self, window_width):
         self.rect.x = window_width - 350
 
-def main():
+def main(trace_memory=False):
     # pygame setup
     pygame.init()
 
@@ -579,7 +581,17 @@ def main():
             "Greedy-BeFs": grid.greedy_best_first_search
         }
         if algorithm in pathfinding_algorithms:
+            if trace_memory:
+                tracemalloc.start()
+
             path = pathfinding_algorithms[algorithm](screen, cube_size, center_x, center_y)
+
+            if trace_memory:
+                snapshot = tracemalloc.take_snapshot()
+                top_stats = snapshot.statistics('filename')
+                grid.save_memory_statistics(top_stats[0], algorithm, grid.current_map_file)
+                tracemalloc.stop()
+
             if path:
                 for (x, y) in path:
                     grid.grid[y][x].color = "purple"
@@ -610,7 +622,7 @@ def main():
                     if toolbar.toolbar_rect.collidepoint(event.pos): # toolbar
                         if toolbar.handle_click(x, y):
                             toolbar.draw_toolbar(screen)
-                        logging.debug("Toolbar clicked")
+                        #logging.debug("Toolbar clicked")
                         if toolbar.selected_tool == 4: # start algo
                             grid.clear_path()
                             redraw_screen()
@@ -703,7 +715,8 @@ def main():
     pygame.quit()
 
 if __name__ == '__main__':
-    #main()
-    cProfile.run('main()', 'profiling_results.prof')
-    p = pstats.Stats('profiling_results.prof')
-    p.strip_dirs().sort_stats('time').print_stats(10)
+    enable_trace_memory = False
+    main(enable_trace_memory)
+    # cProfile.run('main()', 'profiling_results.prof')
+    # p = pstats.Stats('profiling_results.prof')
+    # p.strip_dirs().sort_stats('time').print_stats(10)
