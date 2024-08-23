@@ -160,7 +160,7 @@ class Grid:
                 neighbors.append((new_x, new_y))
         return neighbors
 
-    def bfs(self, screen, cube_size, offset_x, offset_y):
+    def bfs(self, screen, cube_size, offset_x, offset_y, trace_memory_enabled):
         start_time = time.perf_counter()
         queue = deque([self.start_cube])
         previous_cube = {} # maps cube to the cube it came from
@@ -178,7 +178,7 @@ class Grid:
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "BFS", self.current_map_file) # -1 to remove start
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "BFS", self.current_map_file, trace_memory_enabled) # -1 to remove start
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -194,10 +194,10 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "BFS", self.current_map_file) # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "BFS", self.current_map_file, trace_memory_enabled) # -1 to remove start
         return None
 
-    def dfs(self, screen, cube_size, offset_x, offset_y):
+    def dfs(self, screen, cube_size, offset_x, offset_y, trace_memory_enabled):
         start_time = time.perf_counter()
         stack = [self.start_cube]
         previous_cube = {}  # Maps cube to the cube it came from
@@ -215,7 +215,7 @@ class Grid:
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "DFS", self.current_map_file)  # -1 to remove start
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "DFS", self.current_map_file, trace_memory_enabled)  # -1 to remove start
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -231,14 +231,14 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "DFS", self.current_map_file)  # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "DFS", self.current_map_file, trace_memory_enabled)  # -1 to remove start
         return None
 
     @staticmethod
     def heuristic(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1]) # manhattan distance
 
-    def a_star(self, screen, cube_size, offset_x, offset_y):
+    def a_star(self, screen, cube_size, offset_x, offset_y, trace_memory_enabled):
         start_time = time.perf_counter()
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (f_score, node)
@@ -258,7 +258,7 @@ class Grid:
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size ,runtime, True, "A*", self.current_map_file)  # -2: remove start + goal || -1: remove start
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size ,runtime, True, "A*", self.current_map_file, trace_memory_enabled)  # -2: remove start + goal || -1: remove start
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -277,10 +277,10 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "A*", self.current_map_file)  # -1 to remove start
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "A*", self.current_map_file, trace_memory_enabled)  # -1 to remove start
         return None
 
-    def dijkstra(self, screen, cube_size, offset_x, offset_y):
+    def dijkstra(self, screen, cube_size, offset_x, offset_y, trace_memory_enabled):
         start_time = time.perf_counter()
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (g_score, node)
@@ -300,7 +300,7 @@ class Grid:
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "Dijkstra", self.current_map_file)
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "Dijkstra", self.current_map_file, trace_memory_enabled)
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -318,10 +318,10 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "Dijkstra", self.current_map_file)
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "Dijkstra", self.current_map_file, trace_memory_enabled)
         return None
 
-    def greedy_best_first_search(self, screen, cube_size, offset_x, offset_y):
+    def greedy_best_first_search(self, screen, cube_size, offset_x, offset_y, trace_memory_enabled):
         start_time = time.perf_counter()
         open_set = []
         heapq.heappush(open_set, (0, self.start_cube))  # (h_score, node)
@@ -340,7 +340,7 @@ class Grid:
             if current_cube == self.goal_cube:
                 path = self.generate_path(previous_cube, current_cube)
                 runtime = time.perf_counter() - start_time
-                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "Greedy-BeFs", self.current_map_file)
+                self.save_statistics(len(path) - 2, len(self.visited_cubes) - 1, max_queue_size, runtime, True, "Greedy-BeFs", self.current_map_file, trace_memory_enabled)
                 return path
 
             for neighbor in self.get_neighbors(*current_cube):
@@ -357,7 +357,7 @@ class Grid:
 
         logging.info("No path found.")
         runtime = time.perf_counter() - start_time
-        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "Greedy-BeFs", self.current_map_file)
+        self.save_statistics(0, len(self.visited_cubes) - 1, max_queue_size, runtime, False, "Greedy-BeFs", self.current_map_file, trace_memory_enabled)
         return None
 
     def clear_path(self):
@@ -366,16 +366,18 @@ class Grid:
         self.visited_cubes.clear()
 
     @staticmethod
-    def save_statistics(path_length, visited_cubes, max_queue_size, runtime, found_goal, algorithm, current_map_file, filename="results.csv"):
-        with open(filename, 'a', newline='') as f:
-            writer = csv.writer(f, delimiter=';')
+    def save_statistics(path_length, visited_cubes, max_queue_size, runtime, found_goal, algorithm, current_map_file, memory_tracing_enabled):
+        if memory_tracing_enabled:
+            return None
+        with open("results/Stats.csv", "a", newline="") as f:
+            writer = csv.writer(f, delimiter=";")
             writer.writerow([algorithm, path_length, visited_cubes, max_queue_size, runtime, found_goal, current_map_file if current_map_file else 'not found'])
         logging.info(f"Stats: {algorithm} => path_len: {path_length}, visited_cubes: {visited_cubes}, max_queue_size: {max_queue_size}, runtime: {runtime}, found_goal: {found_goal}, map: {current_map_file if current_map_file else 'na'}")
 
     @staticmethod
-    def save_memory_statistics(stat, algorithm, map_file, filename="memory-consumption.csv"):
-        with open(filename, 'a', newline='') as f:
-            writer = csv.writer(f, delimiter=';')
+    def save_memory_statistics(stat, algorithm, map_file):
+        with open("results/Memory-Consumption.csv", "a", newline="") as f:
+            writer = csv.writer(f, delimiter=";")
             writer.writerow([algorithm, map_file if map_file else 'not found', stat.size / 1024, stat.count, stat.size / stat.count])
 class Toolbar:
     def __init__(self, tools, tool_size, tool_spacing):
@@ -452,7 +454,7 @@ class InputField:
         pygame.display.update(self.rect)
 
     def shift(self, window_width):
-        self.rect.x = window_width - 150
+        self.rect.x = window_width - 270
 
 class Dropdown:
     def __init__(self, x, y, width, height, font, options):
@@ -493,9 +495,32 @@ class Dropdown:
             pygame.display.flip()
 
     def shift(self, window_width):
-        self.rect.x = window_width - 350
+        self.rect.x = window_width - 400
 
-def main(trace_memory=False):
+class ToggleButton:
+    def __init__(self, x, y, width, height, offset, font, text):
+        self.offset = offset
+        self.rect = pygame.Rect(x, y, width, height)
+        self.font = font
+        self.text = text
+        self.state = False
+        self.color_on = pygame.Color('green')
+        self.color_off = pygame.Color('grey')
+
+    def draw(self, screen):
+        color = self.color_on if self.state else self.color_off
+        pygame.draw.rect(screen, color, self.rect)
+        text = self.font.render(self.text, True, "white")
+        screen.blit(text, (self.rect.x + 3, self.rect.y + 10))
+        pygame.display.update(self.rect)
+    def handle_click(self):
+        self.state = not self.state
+
+    def shift(self, window_width):
+        self.rect.x = window_width - self.offset
+
+
+def main():
     # pygame setup
     pygame.init()
 
@@ -511,6 +536,8 @@ def main(trace_memory=False):
         toolbar.draw_toolbar(screen)
         input_field.draw(screen)
         dropdown.draw(screen)
+        memory_tracing_toggle.draw(screen)
+        run_ten_times_toggle.draw(screen)
         for y in range(grid.rows):
             for x in range(grid.cols):
                 grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
@@ -524,12 +551,18 @@ def main(trace_memory=False):
     # font setup
     font_input_field = pygame.font.Font(None, 28)
     font_drop_down = pygame.font.Font(None, 24)
+    memory_tracing_toggle_button = pygame.font.Font(None, 12)
+    run_ten_times_toogle_button = pygame.font.Font(None, 18)
 
     # input field setup
-    input_field = InputField(window_width - 150, 10, 120, 30, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
+    input_field = InputField(window_width - 270, 10, 120, 30, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
 
     # dropdown setup
-    dropdown = Dropdown(window_width - 350, 10, 120, 25, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"])
+    dropdown = Dropdown(window_width - 400, 10, 120, 25, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"])
+
+    # toggle button setup
+    memory_tracing_toggle = ToggleButton(window_width - 140, 10, 60, 30, 140, memory_tracing_toggle_button, "Trace-Memory")
+    run_ten_times_toggle = ToggleButton(window_width - 70, 10, 30, 30, 70, run_ten_times_toogle_button, "10x")
 
     # toolbar setup
     def load_image(file_path, size):
@@ -579,21 +612,30 @@ def main(trace_memory=False):
             "Greedy-BeFs": grid.greedy_best_first_search
         }
         if algorithm in pathfinding_algorithms:
-            if trace_memory:
-                tracemalloc.start()
 
-            path = pathfinding_algorithms[algorithm](screen, cube_size, center_x, center_y)
+            algo_runs = 10 if run_ten_times_toggle.state else 1
 
-            if trace_memory:
-                snapshot = tracemalloc.take_snapshot()
-                top_stats = snapshot.statistics('filename')
-                grid.save_memory_statistics(top_stats[0], algorithm, grid.current_map_file)
-                tracemalloc.stop()
+            for _ in range(algo_runs):
+                grid.clear_path()
+                redraw_screen()
 
-            if path:
-                for (x, y) in path:
-                    grid.grid[y][x].color = "purple"
-                    grid.dirty_rects.append(grid.draw_cube(screen, x, y, cube_size, center_x, center_y))
+                if memory_tracing_toggle.state:
+                    tracemalloc.start()
+
+                path = pathfinding_algorithms[algorithm](screen, cube_size, center_x, center_y, memory_tracing_toggle.state)
+
+                if memory_tracing_toggle.state:
+                    snapshot = tracemalloc.take_snapshot()
+                    top_stats = snapshot.statistics('filename')
+                    grid.save_memory_statistics(top_stats[0], algorithm, grid.current_map_file)
+                    tracemalloc.stop()
+
+                if path:
+                    for (x, y) in path:
+                        grid.grid[y][x].color = "purple"
+                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, cube_size, center_x, center_y))
+                    pygame.display.flip()
+                    grid.dirty_rects.clear()
 
     while running:
         clock.tick(60)
@@ -612,6 +654,8 @@ def main(trace_memory=False):
                 center_x, center_y = grid.center_grid(new_window_width, new_window_height, int(cube_size * zoom_factor))
                 input_field.shift(new_window_width)
                 dropdown.shift(new_window_width)
+                memory_tracing_toggle.shift(new_window_width)
+                run_ten_times_toggle.shift(new_window_width)
                 redraw_screen()
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -652,6 +696,12 @@ def main(trace_memory=False):
                     elif input_field.rect.collidepoint(event.pos): # input_field
                         input_field.handle_click(event)
                         input_field.draw(screen)
+                    elif memory_tracing_toggle.rect.collidepoint(event.pos):  # toggle button
+                        memory_tracing_toggle.handle_click()
+                        memory_tracing_toggle.draw(screen)
+                    elif run_ten_times_toggle.rect.collidepoint(event.pos):  # toggle button
+                        run_ten_times_toggle.handle_click()
+                        run_ten_times_toggle.draw(screen)
                     else: # grid
                         mouse_down = True
                         input_field.active = False
@@ -713,8 +763,7 @@ def main(trace_memory=False):
     pygame.quit()
 
 if __name__ == '__main__':
-    enable_trace_memory = False
-    main(enable_trace_memory)
+    main()
     # cProfile.run('main()', 'profiling_results.prof')
     # p = pstats.Stats('profiling_results.prof')
     # p.strip_dirs().sort_stats('time').print_stats(10)
