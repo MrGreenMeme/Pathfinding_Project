@@ -507,7 +507,6 @@ def main(trace_memory=False):
     screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE)
     pygame.display.set_caption("Pathfinding")
     def redraw_screen():
-        start_time = time.perf_counter()
         screen.fill("white")
         toolbar.draw_toolbar(screen)
         input_field.draw(screen)
@@ -516,7 +515,6 @@ def main(trace_memory=False):
             for x in range(grid.cols):
                 grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
         pygame.display.flip()
-        logging.debug(f"Screen redrawn + {time.perf_counter() - start_time}")
 
     # grid setup
     rows, cols = (15, 15)
