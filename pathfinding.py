@@ -10,6 +10,7 @@ import cProfile
 import pstats
 import tracemalloc
 import csv
+import os
 
 class Cube:
     def __init__(self, color="white", traversable=True):
@@ -39,13 +40,6 @@ class Grid:
         if cube_size > 9:
             pygame.draw.rect(screen, "black", rect, 1)
         return rect
-
-    def center_grid(self, window_width, window_height, cube_size):
-        grid_width = self.cols * cube_size
-        grid_height = self.rows * cube_size
-        offset_x = (window_width - grid_width) // 2
-        offset_y = (window_height - grid_height) // 2
-        return offset_x, offset_y
 
     def handle_click(self, x, y, screen, cube_size, offset_x, offset_y, selected_tool):
         grid_x = (x - offset_x) // cube_size
@@ -427,13 +421,15 @@ class InputField:
             self.active = not self.active
         self.color = self.active_color if self.active else self.inactive_color
 
-    def handle_input(self, event, screen, grid):
+    def handle_input(self, event, screen, grid, view):
         if self.active:
             if event.key == pygame.K_RETURN:
                 logging.debug(f"Entered: {self.text}")
                 try:
                     new_rows, new_cols = map(int, self.text.lower().split('x'))
                     grid.resize(new_rows, new_cols)
+                    view.calculate_zoom_factor(grid.rows, grid.cols)
+                    view.center_grid(grid.rows, grid.cols)
                     self.redraw_screen()
                 except Exception:
                     logging.info("Format should be rowsxcols like 10x10")
@@ -519,6 +515,31 @@ class ToggleButton:
     def shift(self, window_width):
         self.rect.x = window_width - self.offset
 
+class View:
+    def __init__(self, window_width, window_height, zoom_factor, zoom_increment, cube_size, debug_font):
+        self.window_width = window_width
+        self.window_height = window_height
+        self.zoom_factor = zoom_factor
+        self.zoom_increment = zoom_increment
+        self.cube_size = cube_size
+        self.debug_font = debug_font
+        self.center_x = 0
+        self.center_y = 0
+
+    def calculate_zoom_factor(self, grid_rows, grid_cols):
+        required_zoom_x = self.window_width / (grid_cols * self.cube_size)
+        required_zoom_y = self.window_height / (grid_rows * self.cube_size)
+        self.zoom_factor = min(required_zoom_x, required_zoom_y)
+
+    def center_grid(self, grid_rows, grid_cols):
+        grid_width = grid_cols * int(self.cube_size * self.zoom_factor)
+        grid_height = grid_rows * int(self.cube_size * self.zoom_factor)
+        self.center_x = (self.window_width - grid_width) // 2
+        self.center_y = (self.window_height - grid_height) // 2
+
+    def draw_debug_text(self, screen, debug_text, position):
+        text_surface = self.debug_font.render(debug_text, True, "black")
+        screen.blit(text_surface, position)
 
 def main():
     # pygame setup
@@ -531,16 +552,25 @@ def main():
     window_width, window_height = 1000, 1000
     screen = pygame.display.set_mode((window_width, window_height), pygame.RESIZABLE)
     pygame.display.set_caption("Pathfinding")
-    def redraw_screen():
+
+    def redraw_screen(algorithm = None):
         screen.fill("white")
         toolbar.draw_toolbar(screen)
         input_field.draw(screen)
         dropdown.draw(screen)
         memory_tracing_toggle.draw(screen)
         run_ten_times_toggle.draw(screen)
+        all_maps_toggle.draw(screen)
         for y in range(grid.rows):
             for x in range(grid.cols):
-                grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
+                grid.draw_cube(screen, x, y, int(view.cube_size * view.zoom_factor), view.center_x, view.center_y)
+
+        if grid.current_map_file:
+            view.draw_debug_text(screen, f"Current Map: {grid.current_map_file}", (10, view.window_height - 30))
+
+        if algorithm:
+            view.draw_debug_text(screen, f"Running: {algorithm}", (view.window_width - 170, view.window_height - 30))
+
         pygame.display.flip()
 
     # grid setup
@@ -548,21 +578,26 @@ def main():
     grid = Grid(rows, cols)
     cube_size = 45
 
+    # view setup
+    debug_font = pygame.font.Font(None, 22)
+    view = View(window_width, window_height, 1.0, 0.05, cube_size, debug_font)
+
     # font setup
     font_input_field = pygame.font.Font(None, 28)
     font_drop_down = pygame.font.Font(None, 24)
     memory_tracing_toggle_button = pygame.font.Font(None, 12)
-    run_ten_times_toogle_button = pygame.font.Font(None, 18)
+    run_ten_times_toggle_button = pygame.font.Font(None, 18)
 
     # input field setup
-    input_field = InputField(window_width - 270, 10, 120, 30, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
+    input_field = InputField(window_width - 270, 10, 100, 30, font_input_field, pygame.Color('grey75'), pygame.Color('grey0'), redraw_screen)
 
     # dropdown setup
-    dropdown = Dropdown(window_width - 400, 10, 120, 25, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"])
+    dropdown = Dropdown(window_width - 400, 10, 120, 25, font_drop_down, ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs", "Run all"])
 
     # toggle button setup
-    memory_tracing_toggle = ToggleButton(window_width - 140, 10, 60, 30, 140, memory_tracing_toggle_button, "Trace-Memory")
-    run_ten_times_toggle = ToggleButton(window_width - 70, 10, 30, 30, 70, run_ten_times_toogle_button, "10x")
+    memory_tracing_toggle = ToggleButton(window_width - 160, 10, 60, 30, 160, memory_tracing_toggle_button, "Trace-Memory")
+    run_ten_times_toggle = ToggleButton(window_width - 90, 10, 30, 30, 90, run_ten_times_toggle_button, "10x")
+    all_maps_toggle = ToggleButton(window_width - 50, 10, 40, 30, 50, memory_tracing_toggle_button, "All maps")
 
     # toolbar setup
     def load_image(file_path, size):
@@ -579,17 +614,8 @@ def main():
     load_img = load_image('load.png', tool_size)
     toolbar = Toolbar([("start", "green"), ("goal", flag_img), ("obstacle", "grey"), ("eraser", eraser_img), ("play", play_img), ("clear", clear_img), ("save", save_img), ("load", load_img)], 50, 10)
 
-    # zoom
-    def calculate_zoom_factor(window_width, window_height, grid_cols, grid_rows, cube_size):
-        required_zoom_x = window_width / (grid_cols * cube_size)
-        required_zoom_y = window_height / (grid_rows * cube_size)
-        return min(required_zoom_x, required_zoom_y)
-
-    zoom_factor = 1.0
-    zoom_increment = 0.05
-
     # center grid
-    center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+    view.center_grid(grid.rows, grid.cols)
 
     # Initial draw of the entire grid
     redraw_screen()
@@ -603,11 +629,11 @@ def main():
     move_grid_y = 0
 
     # Algorithms
-    def run_algorithm(grid, algorithm, screen, cube_size, center_x, center_y):
+    def run_algorithm(grid, view, screen, algorithm):
         pathfinding_algorithms = {
+            "DFS": grid.dfs,
             "BFS": grid.bfs,
             "A*": grid.a_star,
-            "DFS": grid.dfs,
             "Dijkstra": grid.dijkstra,
             "Greedy-BeFs": grid.greedy_best_first_search
         }
@@ -617,12 +643,12 @@ def main():
 
             for _ in range(algo_runs):
                 grid.clear_path()
-                redraw_screen()
+                redraw_screen(algorithm)
 
                 if memory_tracing_toggle.state:
                     tracemalloc.start()
 
-                path = pathfinding_algorithms[algorithm](screen, cube_size, center_x, center_y, memory_tracing_toggle.state)
+                path = pathfinding_algorithms[algorithm](screen, int(view.cube_size * view.zoom_factor), view.center_x, view.center_y, memory_tracing_toggle.state)
 
                 if memory_tracing_toggle.state:
                     snapshot = tracemalloc.take_snapshot()
@@ -633,9 +659,39 @@ def main():
                 if path:
                     for (x, y) in path:
                         grid.grid[y][x].color = "purple"
-                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, cube_size, center_x, center_y))
+                        grid.dirty_rects.append(grid.draw_cube(screen, x, y, int(view.cube_size * view.zoom_factor), view.center_x, view.center_y))
                     pygame.display.flip()
                     grid.dirty_rects.clear()
+
+    def run_all_algorithms(grid, view, screen):
+        algorithms = ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"]
+        for algorithm in algorithms:
+            run_algorithm(grid, view, screen, algorithm)
+            pygame.time.wait(500)
+
+    def run_all_maps(grid, view, screen, selected_dropdown_option):
+        if selected_dropdown_option is None:
+            return None
+
+        map_dir = "maps"
+        map_files = [f for f in os.listdir(map_dir) if f.endswith('.txt')]
+        sorted_map_files = sorted(map_files, key=lambda map_name: [int(part) for part in map_name.replace('.txt', '').split('_') if part.isdigit()])
+
+        for map_file in sorted_map_files:
+            grid.start_cube = None
+            grid.goal_cube = None
+            grid.visited_cubes.clear()
+
+            map_path = os.path.join(map_dir, map_file).replace("\\", "/")
+            grid.load_grid(map_path)
+            view.calculate_zoom_factor(grid.rows, grid.cols)
+            view.center_grid(grid.rows, grid.cols)
+            redraw_screen()
+
+            if selected_dropdown_option == "Run all":
+                run_all_algorithms(grid, view, screen)
+            else:
+                run_algorithm(grid, view, screen, selected_dropdown_option)
 
     while running:
         clock.tick(60)
@@ -647,15 +703,17 @@ def main():
 
             elif event.type == pygame.VIDEORESIZE:
                 new_window_width, new_window_height = event.size
-                window_width, window_height = new_window_width, new_window_height
+                view.window_width, view.window_height = new_window_width, new_window_height
                 logging.debug("New window_width: " +  str(new_window_width) + " new window_height: " + str(new_window_height))
 
                 screen = pygame.display.set_mode((new_window_width, new_window_height), pygame.RESIZABLE)
-                center_x, center_y = grid.center_grid(new_window_width, new_window_height, int(cube_size * zoom_factor))
+                view.calculate_zoom_factor(grid.rows, grid.cols)
+                view.center_grid(grid.rows, grid.cols)
                 input_field.shift(new_window_width)
                 dropdown.shift(new_window_width)
                 memory_tracing_toggle.shift(new_window_width)
                 run_ten_times_toggle.shift(new_window_width)
+                all_maps_toggle.shift(new_window_width)
                 redraw_screen()
 
             elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -664,12 +722,16 @@ def main():
                     if toolbar.toolbar_rect.collidepoint(event.pos): # toolbar
                         if toolbar.handle_click(x, y):
                             toolbar.draw_toolbar(screen)
-                        #logging.debug("Toolbar clicked")
                         if toolbar.selected_tool == 4: # start algo
                             grid.clear_path()
                             redraw_screen()
-                            if dropdown.selected in ["BFS", "A*", "DFS", "Dijkstra", "Greedy-BeFs"] and grid.start_cube and grid.goal_cube:
-                                run_algorithm(grid, dropdown.selected, screen, int(cube_size * zoom_factor), center_x, center_y)
+                            if all_maps_toggle.state:
+                                run_all_maps(grid, view, screen, dropdown.selected)
+                            else:
+                                if dropdown.selected in ["DFS", "BFS", "A*", "Dijkstra", "Greedy-BeFs"] and grid.start_cube and grid.goal_cube:
+                                    run_algorithm(grid, view, screen, dropdown.selected)
+                                elif dropdown.selected == "Run all" and grid.start_cube and grid.goal_cube:
+                                    run_all_algorithms(grid, view, screen)
                         if toolbar.selected_tool == 5: # clear algo
                             grid.clear_path()
                             redraw_screen()
@@ -685,9 +747,9 @@ def main():
                                 grid.goal_cube = None
                                 grid.visited_cubes.clear()
                                 grid.load_grid(filename)
-                                zoom_factor = calculate_zoom_factor(window_width, window_height, grid.cols, grid.rows, cube_size)
-                                logging.debug(f"Grid imported. Calculated zoom factor: {zoom_factor}")
-                                center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                                view.calculate_zoom_factor(grid.rows, grid.cols)
+                                logging.debug(f"Grid imported. Calculated zoom factor: {view.zoom_factor}")
+                                view.center_grid(grid.rows, grid.cols)
                                 redraw_screen()
                                 toolbar.selected_tool = None
                     elif dropdown.rect.collidepoint(event.pos) or dropdown.option_rect.collidepoint(event.pos): # dropdown
@@ -702,6 +764,9 @@ def main():
                     elif run_ten_times_toggle.rect.collidepoint(event.pos):  # toggle button
                         run_ten_times_toggle.handle_click()
                         run_ten_times_toggle.draw(screen)
+                    elif all_maps_toggle.rect.collidepoint(event.pos):  # toggle button
+                        all_maps_toggle.handle_click()
+                        all_maps_toggle.draw(screen)
                     else: # grid
                         mouse_down = True
                         input_field.active = False
@@ -713,7 +778,7 @@ def main():
                             move_grid_x, move_grid_y = event.pos
                             move_grid = True
                         else:
-                            grid.handle_click(x, y, screen, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
+                            grid.handle_click(x, y, screen, int(view.cube_size * view.zoom_factor), view.center_x, view.center_y, toolbar.selected_tool)
 
             elif event.type == pygame.MOUSEBUTTONUP:
                 if event.button == 1:
@@ -728,33 +793,33 @@ def main():
                     if move_grid:
                         shift_x = x - move_grid_x
                         shift_y = y - move_grid_y
-                        center_x += shift_x
-                        center_y += shift_y
+                        view.center_x += shift_x
+                        view.center_y += shift_y
                         move_grid_x = x
                         move_grid_y = y
                     else:
-                        grid.handle_click(x, y, screen, int(cube_size * zoom_factor), center_x, center_y, toolbar.selected_tool)
+                        grid.handle_click(x, y, screen, int(view.cube_size * view.zoom_factor), view.center_x, view.center_y, toolbar.selected_tool)
 
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    zoom_factor += zoom_increment
-                    logging.debug(f"Zoomed in. New zoom factor: {zoom_factor} + {int(cube_size * zoom_factor)}")
-                    center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                    view.zoom_factor += view.zoom_increment
+                    logging.debug(f"Zoomed in. New zoom factor: {view.zoom_factor} + {int(view.cube_size * view.zoom_factor)}")
+                    view.center_grid(grid.rows, grid.cols)
                     redraw_screen()
                 elif event.key == pygame.K_DOWN:
-                    zoom_factor = max(zoom_increment, zoom_factor - zoom_increment)
-                    logging.debug(f"Zoomed out. New zoom factor: {zoom_factor} + {int(cube_size * zoom_factor)}")
-                    center_x, center_y = grid.center_grid(window_width, window_height, int(cube_size * zoom_factor))
+                    view.zoom_factor = max(view.zoom_increment, view.zoom_factor - view.zoom_increment)
+                    logging.debug(f"Zoomed out. New zoom factor: {view.zoom_factor} + {int(view.cube_size * view.zoom_factor)}")
+                    view.center_grid(grid.rows, grid.cols)
                     redraw_screen()
-                input_field.handle_input(event, screen, grid)
+                input_field.handle_input(event, screen, grid, view)
 
         # redraw only dirty rectangles
         for rect in grid.dirty_rects:
             pygame.draw.rect(screen, "white", rect)  # Clear the previous color
             # Redraw the cube in the dirty rect
-            x = (rect.x - center_x) // int(cube_size * zoom_factor)
-            y = (rect.y - center_y) // int(cube_size * zoom_factor)
-            grid.draw_cube(screen, x, y, int(cube_size * zoom_factor), center_x, center_y)
+            x = (rect.x - view.center_x) // int(view.cube_size * view.zoom_factor)
+            y = (rect.y - view.center_y) // int(view.cube_size * view.zoom_factor)
+            grid.draw_cube(screen, x, y, int(view.cube_size * view.zoom_factor), view.center_x, view.center_y)
 
         if grid.dirty_rects:
             pygame.display.flip()
