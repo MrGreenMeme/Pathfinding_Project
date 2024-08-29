@@ -7,8 +7,8 @@ def extract_map_info(filename):
     space_number = int(parts[4].replace(".txt", ""))
     return map_size, map_number, space_number
 
-df = pandas.read_csv("results/Stats.csv", sep=";")
-df_memory = pandas.read_csv("results/Memory-Consumption.csv", sep=";")
+df = pandas.read_csv("../results/Stats.csv", sep=";")
+df_memory = pandas.read_csv("../results/Memory-Consumption.csv", sep=";")
 
 # clean data
 df_cleaned = df.dropna(subset=["Map-Filename"])
