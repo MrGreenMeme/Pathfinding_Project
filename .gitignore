@@ -1,3 +1,4 @@
 Pathfinding.iml
 /.idea/
 /venv/
+*.pyc
