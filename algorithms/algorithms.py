@@ -23,7 +23,7 @@ class Algorithms:
         self.grid = grid
         self.visited_cubes = set()
     @staticmethod
-    def generate_path(previous_cube, current_cube):
+    def generate_path(previous_cube, current_cube) -> list:
         """
         Generates a path from the start to the current cube using the previous_cube mapping.
 
@@ -46,7 +46,7 @@ class Algorithms:
             self.grid.grid[y][x].color = "white"
         self.visited_cubes.clear()
 
-    def get_neighbors(self, x, y):
+    def get_neighbors(self, x: int, y: int):
         """
         Gets the neighboring cubes of a given cube that are traversable.
 
@@ -165,18 +165,18 @@ class Algorithms:
         return None
 
     @staticmethod
-    def heuristic(a, b):
+    def heuristic(neighbor_cube, goal_cube):
         """
-        Calculates the heuristic value (Manhattan distance) between two cubes.
+        Calculates the heuristic value (Manhattan distance) between the neighbor cube and the goal cube.
 
         Args:
-            a: The coordinates of the first cube.
-            b: The coordinates of the second cube.
+            neighbor_cube: The coordinates of the neighbor cube.
+            goal_cube: The coordinates of the goal cube.
 
         Returns:
-            The Manhattan distance between the two cubes.
+            The Manhattan distance between the neighbor cube and the goal cube.
         """
-        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+        return abs(neighbor_cube[0] - goal_cube[0]) + abs(neighbor_cube[1] - goal_cube[1])
 
     def a_star(self, screen, cube_size: int, offset_x: int, offset_y: int, trace_memory_enabled: bool):
         """

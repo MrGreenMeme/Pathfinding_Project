@@ -2,3 +2,4 @@ Pathfinding.iml
 /.idea/
 /venv/
 *.pyc
+/plots/

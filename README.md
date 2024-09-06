@@ -37,9 +37,21 @@ python main.py
 
 ## Application Overview
 
+### Grid
+
+![grid](assets/images/grid.png)
+
+* **Zoom in**: Press :arrow_up:
+* **Zoom out**: Press :arrow_down:
+* **Move grid**: Left-click and drag to move the grid around if no tool is selected.
+
 ### Toolbar
 
 ![toolbar](assets/images/toolbar.png)
+
+Tools are selected by left-clicking on them.(**Start_Cube** is selected as default)\
+**Start_Cube**, **Goal_Cube**, **Obstacle**, **Eraser**: hold left-click to continuously place or erase cubes on the grid.
+
 Starting from the left:
 * **Start_Cube**: Set the start point on the grid
 * **Goal_Cube**: Set the end point on the grid
@@ -58,7 +70,6 @@ Click on the dropdown to select an algorithm
 
 ![dropdown](assets/images/dropdown_active.png)
 
-Starting from top to bottom:
 * **DFS**
 * **BFS**
 * **A***
@@ -110,5 +121,5 @@ The merged data will be saved in `results/results.csv`. To merge the tables exec
     ```cmd
     python utils/visualize-certain-map-results.py
     ```
-    A file explorer window will open, allowing you to select a map.
+    A file explorer window will open, allowing you to select a map.\
     Choose a map for which data is available to generate the visualization.
