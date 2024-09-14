@@ -208,6 +208,18 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 running = False
 
+            if toolbar.selected_tool == 7 and event.button == 1: # import grid
+                toolbar.selected_tool = None
+                map_dir = os.getcwd() + "/maps"
+                filename = filedialog.askopenfilename(initialdir=map_dir, filetypes=[("Text files", "*.txt")])
+                if filename:
+                    algorithms.visited_cubes.clear()
+                    grid.load_grid(filename)
+                    grid_view.calculate_zoom_factor(grid.rows, grid.cols)
+                    logging.debug(f"Grid imported. Calculated zoom factor: {grid_view.zoom_factor}")
+                    grid_view.center_grid(grid.rows, grid.cols)
+                    redraw_screen()
+
             elif event.type == pygame.VIDEORESIZE:
                 new_window_width, new_window_height = event.size
                 grid_view.window_width, grid_view.window_height = new_window_width, new_window_height
@@ -244,16 +256,6 @@ def main() -> None:
                             redraw_screen()
                         if toolbar.selected_tool == 6: # export grid
                             grid.export_grid()
-                        elif toolbar.selected_tool == 7: # import grid
-                            filename = filedialog.askopenfilename(initialdir=os.getcwd(), filetypes=[("Text files", "*.txt")])
-                            if filename:
-                                algorithms.visited_cubes.clear()
-                                grid.load_grid(filename)
-                                grid_view.calculate_zoom_factor(grid.rows, grid.cols)
-                                logging.debug(f"Grid imported. Calculated zoom factor: {grid_view.zoom_factor}")
-                                grid_view.center_grid(grid.rows, grid.cols)
-                                redraw_screen()
-                                toolbar.selected_tool = None
                     elif dropdown.rect.collidepoint(event.pos) or dropdown.option_rect.collidepoint(event.pos): # dropdown
                         dropdown.handle_click(event)
                         dropdown.draw(screen)
