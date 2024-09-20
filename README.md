@@ -26,6 +26,7 @@ Maze-Benchmarks used in this project: https://www.movingai.com/benchmarks/maze/i
 
 ## Getting started
 
+### Windows
 Before running the program, make sure to install the required packages by running:
 ```cmd
 pip install -r requirements.txt
@@ -33,6 +34,21 @@ pip install -r requirements.txt
 To start the application run:
 ```cmd
 python main.py
+```
+
+### Unix
+For Unix-based systems (e.g., Ubuntu), you need to install tkinter as a system package:
+```bash
+sudo apt-get update
+sudo apt-get install python3-tk
+```
+Before running the program, make sure to install the required packages by running:
+```bash
+pip install -r requirements.txt
+```
+To start the application run:
+```bash
+python3 main.py
 ```
 
 ## Application Overview
