@@ -103,10 +103,6 @@ class Algorithms:
             writer = csv.writer(f, delimiter=";")
             writer.writerow([algorithm, map_file if map_file else 'not found', stat.size / 1024, stat.count, stat.size / stat.count])
 
-    def run(self, screen, cube_size: int, offset_x: int, offset_y: int, trace_memory_enabled: bool):
-        raise NotImplementedError("Subclasses should implement this method.")
-
-
     def bfs(self, screen, cube_size: int, offset_x: int, offset_y: int, trace_memory_enabled: bool):
         """
         Performs Breadth-First Search (BFS) to find a path from the start cube to the goal cube.

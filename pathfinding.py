@@ -214,7 +214,7 @@ def main() -> None:
             if event.type == pygame.QUIT:
                 running = False
 
-            if toolbar.selected_tool == 7 and event.button == 1: # import grid
+            if toolbar.selected_tool == 7: # import map
                 toolbar.selected_tool = None
                 map_dir = os.getcwd() + "/maps"
                 filename = filedialog.askopenfilename(initialdir=map_dir, filetypes=[("Text files", "*.txt")]) # filedialog to select map to import
@@ -242,8 +242,7 @@ def main() -> None:
                 all_maps_toggle.shift(new_window_width)
                 redraw_screen()
 
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1: # only accept left-click
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: # only accept left-click
                     x,y = event.pos # get click position
                     if toolbar.toolbar_rect.collidepoint(event.pos): # toolbar
                         if toolbar.handle_click(x, y):
@@ -291,8 +290,7 @@ def main() -> None:
                         else:
                             grid.handle_click(x, y, screen, int(grid_view.cube_size * grid_view.zoom_factor), grid_view.center_x, grid_view.center_y, toolbar.selected_tool)
 
-            elif event.type == pygame.MOUSEBUTTONUP:
-                if event.button == 1:
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_down = False
                     if move_grid:
                         redraw_screen()
